@@ -24,6 +24,7 @@ public:
 
 private:
   std::vector<ServerConfig> _servers;
+  std::vector<std::string>  tokenize(const std::string &content);
 };
 
 #endif
