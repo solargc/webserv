@@ -1,4 +1,5 @@
 #include <iostream>
+#include "Config.hpp"
 
 int main(int argc, char **argv)
 {
@@ -7,6 +8,6 @@ int main(int argc, char **argv)
 		std::cerr << "Usage: ./webserv <config_file>" << std::endl;
 		return 1;
 	}
-	std::cout << "Config: " << argv[1] << std::endl;
+	Config config(argv[1]);
 	return 0;
 }

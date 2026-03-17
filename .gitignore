@@ -1,6 +1,13 @@
 # Prerequisites
 *.d
 
+# LSP
+compile_commands.json
+.clangd
+
+# Fuzzy finder index
+*.idx
+
 # Compiled Object files
 *.slo
 *.lo

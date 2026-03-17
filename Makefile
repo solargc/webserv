@@ -7,7 +7,8 @@ SRC_DIR		= src
 OBJ_DIR		= obj
 INC_DIR		= includes
 
-SRCS		= main.cpp
+SRCS		= main.cpp \
+			  Config.cpp
 OBJS		= $(addprefix $(OBJ_DIR)/, $(SRCS:.cpp=.o))
 
 all: $(NAME)
