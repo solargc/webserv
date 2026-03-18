@@ -8,7 +8,10 @@ OBJ_DIR		= obj
 INC_DIR		= includes
 
 SRCS		= main.cpp \
-			  Config.cpp
+			  Config/Config.cpp \
+			  Config/tokenizer.cpp \
+			  Config/parser.cpp
+
 OBJS		= $(addprefix $(OBJ_DIR)/, $(SRCS:.cpp=.o))
 
 all: $(NAME)
@@ -17,7 +20,7 @@ $(NAME): $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o $(NAME)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
-	mkdir -p $(OBJ_DIR)
+	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(INC_DIR) -c $< -o $@
 
 clean:
