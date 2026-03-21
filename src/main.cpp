@@ -1,4 +1,5 @@
 #include "Config.hpp"
+#include "Server.hpp"
 #include <iostream>
 
 int main(int argc, char **argv) {
@@ -8,16 +9,8 @@ int main(int argc, char **argv) {
     }
     try {
         Config config(argv[1]);
-        const std::vector<ServerConfig> &servers = config.getServers();
-        for (size_t i = 0; i < servers.size(); i++) {
-            std::cout << "server " << servers[i].host << ":" << servers[i].port
-                      << std::endl;
-            for (size_t j = 0; j < servers[i].routes.size(); j++) {
-                const RouteConfig &r = servers[i].routes[j];
-                std::cout << "  location " << r.path << " root=" << r.root
-                          << " index=" << r.index << std::endl;
-            }
-        }
+        Server server(config.getServers());
+        server.run();
     } catch (std::exception &e) {
         std::cerr << e.what() << std::endl;
         return 1;

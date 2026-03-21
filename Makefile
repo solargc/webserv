@@ -10,7 +10,8 @@ INC_DIR		= includes
 SRCS		= main.cpp \
 			  Config/Config.cpp \
 			  Config/tokenizer.cpp \
-			  Config/parser.cpp
+			  Config/parser.cpp \
+			  Server.cpp
 
 OBJS		= $(addprefix $(OBJ_DIR)/, $(SRCS:.cpp=.o))
 
