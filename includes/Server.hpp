@@ -1,6 +1,7 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
+#include "Client.hpp"
 #include "Config.hpp"
 #include <netinet/in.h>
 #include <poll.h>
@@ -16,6 +17,7 @@ class Server {
     std::vector<ServerConfig> configs;
     std::vector<pollfd> fds;
     std::vector<int> listenFds;
+    std::vector<Client *> clients;
 
     void addListenSocket(const ServerConfig &cfg);
     int createSocket();
@@ -23,6 +25,9 @@ class Server {
     void bindAndListen(int fd, const sockaddr_in &addr);
     void registerFd(int fd);
     bool isListenFd(int fd) const;
+    void acceptClient(int listenFd);
+    void readClient(Client *client);
+    void removeClient(Client *client);
 };
 
 #endif
