@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <sys/socket.h>
 
-static int createSocket() {
+static int createTcpSocket() {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0)
         throw std::runtime_error("socket() failed");
@@ -28,16 +28,12 @@ static sockaddr_in resolveAddress(const ServerConfig &cfg) {
     return addr;
 }
 
-static void bindAndListen(int fd, const sockaddr_in &addr) {
+int createListenSocket(const ServerConfig &cfg) {
+    int fd = createTcpSocket();
+    sockaddr_in addr = resolveAddress(cfg);
     if (bind(fd, (sockaddr *)&addr, sizeof(addr)) < 0)
         throw std::runtime_error("bind() failed");
     if (listen(fd, 128) < 0)
         throw std::runtime_error("listen() failed");
-}
-
-int createListenSocket(const ServerConfig &cfg) {
-    int fd = createSocket();
-    sockaddr_in addr = resolveAddress(cfg);
-    bindAndListen(fd, addr);
     return fd;
 }

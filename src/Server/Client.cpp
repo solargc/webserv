@@ -11,8 +11,8 @@ int Client::getFd() const {
     return fd;
 }
 
-void Client::appendData(const char *buf, int n) {
-    buffer.append(buf, n);
+void Client::appendData(const char *buf, int bytesRead) {
+    buffer.append(buf, bytesRead);
 }
 
 const std::string &Client::getBuffer() const {

@@ -5,11 +5,11 @@
 
 RouteConfig Config::parseRoute(const std::vector<std::string> &tokens,
                                size_t &i) {
-    RouteConfig r;
+    RouteConfig route;
 
     if (i >= tokens.size())
         throw std::runtime_error("Expected location path");
-    r.path = tokens[i];
+    route.path = tokens[i];
     i++;
 
     if (i >= tokens.size() || tokens[i] != "{")
@@ -20,7 +20,7 @@ RouteConfig Config::parseRoute(const std::vector<std::string> &tokens,
         if (tokens[i] == "methods") {
             i++;
             while (i < tokens.size() && tokens[i] != ";")
-                r.methods.push_back(tokens[i++]);
+                route.allowedMethods.push_back(tokens[i++]);
             if (i >= tokens.size())
                 throw std::runtime_error("Expected ';' after methods");
             i++;
@@ -28,7 +28,7 @@ RouteConfig Config::parseRoute(const std::vector<std::string> &tokens,
             i++;
             if (i >= tokens.size())
                 throw std::runtime_error("Expected value after 'root'");
-            r.root = tokens[i];
+            route.documentRoot = tokens[i];
             i++;
             if (i >= tokens.size() || tokens[i] != ";")
                 throw std::runtime_error("Expected ';' after root value");
@@ -37,7 +37,7 @@ RouteConfig Config::parseRoute(const std::vector<std::string> &tokens,
             i++;
             if (i >= tokens.size())
                 throw std::runtime_error("Expected value after 'index'");
-            r.index = tokens[i];
+            route.indexFile = tokens[i];
             i++;
             if (i >= tokens.size() || tokens[i] != ";")
                 throw std::runtime_error("Expected ';' after index value");
@@ -51,7 +51,7 @@ RouteConfig Config::parseRoute(const std::vector<std::string> &tokens,
     if (i >= tokens.size())
         throw std::runtime_error("Unexpected end of input in location block");
     i++;
-    return r;
+    return route;
 }
 
 ServerConfig Config::parseServer(const std::vector<std::string> &tokens,
@@ -104,6 +104,6 @@ void Config::buildServers(const std::vector<std::string> &tokens) {
         if (i >= tokens.size() || tokens[i] != "{")
             throw std::runtime_error("Expected '{' after server");
         i++;
-        servers.push_back(parseServer(tokens, i));
+        configs.push_back(parseServer(tokens, i));
     }
 }

@@ -6,9 +6,9 @@
 
 struct RouteConfig {
     std::string path;
-    std::vector<std::string> methods;
-    std::string root;
-    std::string index;
+    std::vector<std::string> allowedMethods;
+    std::string documentRoot;
+    std::string indexFile;
 };
 
 struct ServerConfig {
@@ -20,10 +20,10 @@ struct ServerConfig {
 class Config {
   public:
     Config(const std::string &path);
-    const std::vector<ServerConfig> &getServers() const;
+    const std::vector<ServerConfig> &getConfigs() const;
 
   private:
-    std::vector<ServerConfig> servers;
+    std::vector<ServerConfig> configs;
     std::vector<std::string> tokenize(const std::string &content);
     void buildServers(const std::vector<std::string> &tokens);
     ServerConfig parseServer(const std::vector<std::string> &tokens, size_t &i);

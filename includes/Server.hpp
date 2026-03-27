@@ -13,13 +13,12 @@ class Server {
     void run();
 
   private:
-    std::vector<ServerConfig> configs;
     std::vector<pollfd> fds;
     std::vector<int> listenFds;
     std::vector<Client *> clients;
 
     void registerFd(int fd);
-    bool isListenFd(int fd) const;
+    bool isListenSocket(int fd) const;
     void acceptClient(int listenFd);
     void readClient(Client *client);
     void removeClient(Client *client);

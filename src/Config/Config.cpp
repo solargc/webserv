@@ -15,6 +15,6 @@ Config::Config(const std::string &path) {
     buildServers(tokens);
 }
 
-const std::vector<ServerConfig> &Config::getServers() const {
-    return servers;
+const std::vector<ServerConfig> &Config::getConfigs() const {
+    return configs;
 }

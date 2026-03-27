@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-Server::Server(const std::vector<ServerConfig> &configs) : configs(configs) {
+Server::Server(const std::vector<ServerConfig> &configs) {
     for (size_t i = 0; i < configs.size(); i++) {
         int fd = createListenSocket(configs[i]);
         registerFd(fd);
@@ -28,7 +28,7 @@ void Server::registerFd(int fd) {
     listenFds.push_back(fd);
 }
 
-bool Server::isListenFd(int fd) const {
+bool Server::isListenSocket(int fd) const {
     for (size_t i = 0; i < listenFds.size(); i++)
         if (listenFds[i] == fd)
             return true;
@@ -47,13 +47,13 @@ void Server::acceptClient(int listenFd) {
 }
 
 void Server::readClient(Client *client) {
-    char buf[4096];
-    int n = recv(client->getFd(), buf, sizeof(buf), 0);
+    char buffer[4096];
+    int n = recv(client->getFd(), buffer, sizeof(buffer), 0);
     if (n <= 0) {
         removeClient(client);
         return;
     }
-    client->appendData(buf, n);
+    client->appendData(buffer, n);
     std::cout << client->getBuffer() << std::endl;
 }
 
@@ -82,7 +82,7 @@ void Server::run() {
         for (size_t i = 0; i < fds.size(); i++) {
             if (!(fds[i].revents & POLLIN))
                 continue;
-            if (isListenFd(fds[i].fd))
+            if (isListenSocket(fds[i].fd))
                 acceptClient(fds[i].fd);
             else {
                 Client *client = NULL;
