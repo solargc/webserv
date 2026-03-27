@@ -25,7 +25,7 @@ class Config {
   private:
     std::vector<ServerConfig> servers;
     std::vector<std::string> tokenize(const std::string &content);
-    void parse(const std::vector<std::string> &tokens);
+    void buildServers(const std::vector<std::string> &tokens);
     ServerConfig parseServer(const std::vector<std::string> &tokens, size_t &i);
     RouteConfig parseRoute(const std::vector<std::string> &tokens, size_t &i);
 };

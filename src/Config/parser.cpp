@@ -95,7 +95,7 @@ ServerConfig Config::parseServer(const std::vector<std::string> &tokens,
     return server;
 }
 
-void Config::parse(const std::vector<std::string> &tokens) {
+void Config::buildServers(const std::vector<std::string> &tokens) {
     size_t i = 0;
     while (i < tokens.size()) {
         if (tokens[i] != "server")

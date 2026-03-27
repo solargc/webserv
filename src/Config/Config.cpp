@@ -12,7 +12,7 @@ Config::Config(const std::string &path) {
     buffer << file.rdbuf();
 
     std::vector<std::string> tokens = tokenize(buffer.str());
-    parse(tokens);
+    buildServers(tokens);
 }
 
 const std::vector<ServerConfig> &Config::getServers() const {
