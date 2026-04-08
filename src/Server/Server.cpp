@@ -1,5 +1,6 @@
 #include "Server.hpp"
 #include "SocketSetup.hpp"
+#include "Request.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <sys/socket.h>
@@ -54,7 +55,21 @@ void Server::readClient(Client *client) {
         return;
     }
     client->appendData(buffer, n);
-    std::cout << client->getBuffer() << std::endl;
+
+    const std::string &buf = client->getBuffer();
+    if (buf.find("\r\n\r\n") == std::string::npos)
+        return;
+
+    Request req;
+    if (!req.parse(buf)) {
+        std::cout << "Bad request" << std::endl;
+        return;
+    }
+    std::cout << "Method:  " << req.method  << std::endl;
+    std::cout << "Path:    " << req.path    << std::endl;
+    std::cout << "Version: " << req.version << std::endl;
+    for (std::map<std::string, std::string>::iterator it = req.headers.begin(); it != req.headers.end(); ++it)
+        std::cout << "Header:  " << it->first << ": " << it->second << std::endl;
 }
 
 void Server::removeClient(Client *client) {
