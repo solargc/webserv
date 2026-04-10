@@ -11,6 +11,11 @@ int Client::getFd() const {
     return fd;
 }
 
+
+void Client::clearData() {
+	  buffer.clear();
+}
+
 void Client::appendData(const char *buf, int bytesRead) {
     buffer.append(buf, bytesRead);
 }
