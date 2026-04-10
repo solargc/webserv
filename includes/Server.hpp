@@ -22,6 +22,7 @@ class Server {
     void acceptClient(int listenFd);
     void readClient(Client *client);
     void removeClient(Client *client);
+	bool isRequestComplete(const std::string &buf) const
 };
 
 #endif

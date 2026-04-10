@@ -47,7 +47,7 @@ void Server::acceptClient(int listenFd) {
     clients.push_back(new Client(fd));
 }
 
-bool Server::isRequestComplete(const std::string &buf) {
+bool Server::isRequestComplete(const std::string &buf) const {
 	size_t pos = buf.find("Content-Length:");
 	if (pos == std::string::npos)
 		return true;
@@ -87,6 +87,8 @@ void Server::readClient(Client *client) {
 
 	if (!isRequestComplete(buf))
 		return;	
+
+	client.clearBuffer();
 
 	Request req;
 	if (!req.parse(buf)) {
