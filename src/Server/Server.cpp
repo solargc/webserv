@@ -47,29 +47,57 @@ void Server::acceptClient(int listenFd) {
     clients.push_back(new Client(fd));
 }
 
+bool Server::isRequestComplete(const std::string &buf) {
+	size_t pos = buf.find("Content-Length:");
+	if (pos == std::string::npos)
+		return true;
+	pos += 15; // Length of 'Content-Length:'
+	if (pos >= buf.size())
+		return false;
+	if (buf[pos] == ' ')
+		++pos; // If there is a space after 'Content-Length'
+
+	size_t end = 0;
+	while (pos + end < buf.size() && std::isdigit(buf[pos + end])) {
+		++end;
+	}
+	if (end == 0)
+		return false;
+
+	size_t bodyPos = buf.find("\r\n\r\n");
+	if (bodyPos == std::string::npos)
+		return false;
+	bodyPos += 4;
+	size_t conLen = std::atoi(buf.substr(pos, end).c_str());
+	return (buf.size() - bodyPos == conLen);
+}
+
 void Server::readClient(Client *client) {
-    char buffer[4096];
-    int n = recv(client->getFd(), buffer, sizeof(buffer), 0);
-    if (n <= 0) {
-        removeClient(client);
-        return;
-    }
-    client->appendData(buffer, n);
+	char buffer[4096];
+	int n = recv(client->getFd(), buffer, sizeof(buffer), 0);
+	if (n <= 0) {
+		removeClient(client);
+		return;
+	}
+	client->appendData(buffer, n);
 
-    const std::string &buf = client->getBuffer();
-    if (buf.find("\r\n\r\n") == std::string::npos)
-        return;
+	const std::string &buf = client->getBuffer();
+	if (buf.find("\r\n\r\n") == std::string::npos)
+		return;
 
-    Request req;
-    if (!req.parse(buf)) {
-        std::cout << "Bad request" << std::endl;
-        return;
-    }
-    std::cout << "Method:  " << req.method  << std::endl;
-    std::cout << "Path:    " << req.path    << std::endl;
-    std::cout << "Version: " << req.version << std::endl;
-    for (std::map<std::string, std::string>::iterator it = req.headers.begin(); it != req.headers.end(); ++it)
-        std::cout << "Header:  " << it->first << ": " << it->second << std::endl;
+	if (!isRequestComplete(buf))
+		return;	
+
+	Request req;
+	if (!req.parse(buf)) {
+		std::cout << "Bad request" << std::endl;
+		return;
+	}
+	std::cout << "Method:  " << req.method  << std::endl;
+	std::cout << "Path:    " << req.path    << std::endl;
+	std::cout << "Version: " << req.version << std::endl;
+	for (std::map<std::string, std::string>::iterator it = req.headers.begin(); it != req.headers.end(); ++it)
+		std::cout << "Header:  " << it->first << ": " << it->second << std::endl;
 }
 
 void Server::removeClient(Client *client) {
