@@ -1,12 +1,15 @@
 #include "Server.hpp"
 #include "SocketSetup.hpp"
 #include "Request.hpp"
+#include "Response.hpp"
+
 #include <iostream>
 #include <stdexcept>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <cstdlib>
 
-Server::Server(const std::vector<ServerConfig> &configs) {
+Server::Server(const std::vector<ServerConfig> &configs) : _configs(configs) {
     for (size_t i = 0; i < configs.size(); i++) {
         int fd = createListenSocket(configs[i]);
         registerFd(fd);
@@ -68,8 +71,18 @@ bool Server::isRequestComplete(const std::string &buf) const {
 	if (bodyPos == std::string::npos)
 		return false;
 	bodyPos += 4;
-	size_t conLen = std::atoi(buf.substr(pos, end).c_str());
+	size_t conLen = std::atol(buf.substr(pos, end).c_str());
 	return (buf.size() - bodyPos == conLen);
+}
+
+RouteConfig *Server::findRoute(const Request& req) {
+	for (size_t i = 0; i < _configs.size(); i++) {
+		for (size_t j = 0; j < _configs[i].routes.size(); j++) {
+			if (req.path.find(_configs[i].routes[j].path) == 0)
+				return &_configs[i].routes[j];
+		}
+	}
+	return NULL;
 }
 
 void Server::readClient(Client *client) {
@@ -88,18 +101,28 @@ void Server::readClient(Client *client) {
 	if (!isRequestComplete(buf))
 		return;	
 
-	client.clearBuffer();
-
 	Request req;
 	if (!req.parse(buf)) {
+		client->clearData();
 		std::cout << "Bad request" << std::endl;
 		return;
 	}
+
+	RouteConfig *route = findRoute(req);
+	if (route == NULL) {
+		std::cout << "couldn't find route" << std::endl;
+		return;
+	}
+	Response response(req, *route);
+	std::string raw = response.getRaw();
+	send(client->getFd(), raw.c_str(), raw.size(), 0); // send() is the couterpart to recv()
+
 	std::cout << "Method:  " << req.method  << std::endl;
 	std::cout << "Path:    " << req.path    << std::endl;
 	std::cout << "Version: " << req.version << std::endl;
 	for (std::map<std::string, std::string>::iterator it = req.headers.begin(); it != req.headers.end(); ++it)
 		std::cout << "Header:  " << it->first << ": " << it->second << std::endl;
+	client->clearData();
 }
 
 void Server::removeClient(Client *client) {
