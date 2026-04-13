@@ -10,6 +10,8 @@
 class Response {
   public:
     Response(const Request &req, const RouteConfig &route);
+
+	static std::string error404();
     const std::string &getRaw() const;
   private:
     std::string raw;

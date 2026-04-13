@@ -110,7 +110,8 @@ void Server::readClient(Client *client) {
 
 	RouteConfig *route = findRoute(req);
 	if (route == NULL) {
-		std::cout << "couldn't find route" << std::endl;
+		send(client->getFd(), Response::error404().c_str(), Response::error404().size(), 0);
+		client->clearData();
 		return;
 	}
 	Response response(req, *route);

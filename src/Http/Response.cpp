@@ -8,7 +8,7 @@ void Response::compose(const Request& req, const RouteConfig& route) {
 	std::string filePath = route.documentRoot + req.path;
 	std::ifstream file(filePath.c_str());
 	if (!file.is_open()) {
-		std::cout << "Error: Failed to open a file" << std::endl;
+		raw = error404();
 		return;
 	}
 	std::stringstream ss;
