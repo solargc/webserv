@@ -42,6 +42,15 @@ RouteConfig Config::parseRoute(const std::vector<std::string> &tokens,
             if (i >= tokens.size() || tokens[i] != ";")
                 throw std::runtime_error("Expected ';' after index value");
             i++;
+        } else if (tokens[i] == "upload_path") {
+            i++;
+            if (i >= tokens.size())
+                throw std::runtime_error("Expected value after 'upload_path'");
+            route.uploadPath = tokens[i];
+            i++;
+            if (i >= tokens.size() || tokens[i] != ";")
+                throw std::runtime_error("Expected ';' after upload path value");
+            i++;
         } else {
             throw std::runtime_error("Unknown location directive: " +
                                      tokens[i]);

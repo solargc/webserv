@@ -14,6 +14,7 @@ SRCS		= main.cpp \
 			  Server/Server.cpp \
 			  Server/Client.cpp \
 			  Server/SocketSetup.cpp \
+			  Server/Methods.cpp \
 			  Http/Request.cpp \
 			  Http/Response.cpp \
 			  Http/Error.cpp

@@ -11,6 +11,7 @@ class Client {
     int getFd() const;
     void appendData(const char *buf, int n);
 	void clearBuffer();
+	void clearData();
     const std::string &getBuffer() const;
 
   private:

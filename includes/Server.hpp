@@ -28,6 +28,11 @@ class Server {
 
 	bool isRequestComplete(const std::string &buf) const;
 	RouteConfig *findRoute(const Request& req);
+	virtual bool directoryExists(const char* path);
+
+	// methods
+	void handleGet(Request req, Client *client, RouteConfig *route);
+	void handlePost(Request req, Client *client, RouteConfig *route);
 };
 
 #endif

@@ -9,6 +9,7 @@ struct RouteConfig {
     std::vector<std::string> allowedMethods;
     std::string documentRoot;
     std::string indexFile;
+	std::string uploadPath;
 };
 
 struct ServerConfig {

@@ -114,10 +114,16 @@ void Server::readClient(Client *client) {
 		client->clearData();
 		return;
 	}
-	Response response(req, *route);
-	std::string raw = response.getRaw();
-	send(client->getFd(), raw.c_str(), raw.size(), 0); // send() is the couterpart to recv()
 
+	if (req.method == "GET")
+		handleGet(req, client, route);
+	else if (req.method == "POST")
+		handlePost(req, client, route);
+	else {
+		send(client->getFd(), Response::error405().c_str(), Response::error405().size(), 0);
+		client->clearData();
+		return;
+	}
 	std::cout << "Method:  " << req.method  << std::endl;
 	std::cout << "Path:    " << req.path    << std::endl;
 	std::cout << "Version: " << req.version << std::endl;
