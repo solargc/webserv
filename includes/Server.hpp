@@ -29,10 +29,13 @@ class Server {
 	bool isRequestComplete(const std::string &buf) const;
 	RouteConfig *findRoute(const Request& req);
 	virtual bool directoryExists(const char* path);
+	virtual bool fileExists(const std::string& filename);
 
 	// methods
+	void handleMethods(Request req, Client *client, RouteConfig *route);
 	void handleGet(Request req, Client *client, RouteConfig *route);
 	void handlePost(Request req, Client *client, RouteConfig *route);
+	void handleDelete(Request req, Client *client, RouteConfig *route);
 };
 
 #endif

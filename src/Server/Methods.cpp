@@ -4,14 +4,9 @@
 #include "Response.hpp"
 
 #include <sys/socket.h>
+#include <cstdio>
 #include <sys/stat.h>
 #include <unistd.h>
-
-void Server::handleGet(Request req, Client *client, RouteConfig *route) {
-	Response response(req, *route);
-	std::string raw = response.getRaw();
-	send(client->getFd(), raw.c_str(), raw.size(), 0); // send() is the couterpart to recv()
-}
 
 bool Server::directoryExists(const char* path) {
     struct stat info;
@@ -20,6 +15,31 @@ bool Server::directoryExists(const char* path) {
         return false;
     }
     return (info.st_mode & S_IFDIR) != 0;
+}
+
+bool Server::fileExists(const std::string& filename) {
+    std::ifstream file(filename.c_str());
+    return file.good();
+}
+
+void Server::handleGet(Request req, Client *client, RouteConfig *route) {
+	Response response(req, *route);
+	std::string raw = response.getRaw();
+	send(client->getFd(), raw.c_str(), raw.size(), 0); // send() is the couterpart to recv()
+}
+
+void Server::handleMethods(Request req, Client *client, RouteConfig *route) {
+	if (req.method == "GET")
+		handleGet(req, client, route);
+	else if (req.method == "POST")
+		handlePost(req, client, route);
+	else if (req.method == "DELETE")
+		handleDelete(req, client, route);
+	else {
+		send(client->getFd(), Response::error405().c_str(), Response::error405().size(), 0);
+		client->clearData();
+		return;
+	}
 }
 
 void Server::handlePost(Request req, Client *client, RouteConfig *route) {
@@ -43,4 +63,19 @@ void Server::handlePost(Request req, Client *client, RouteConfig *route) {
 		"Content-Length: 0\r\n"
 		"\r\n";
 	send(client->getFd(), created.c_str(), created.size(), 0);
+}
+
+
+void Server::handleDelete(Request req, Client *client, RouteConfig *route)
+{
+	std::string file = route->documentRoot + req.path;
+	if (!fileExists(file)) {
+		send(client->getFd(), Response::error404().c_str(), Response::error404().size(), 0);
+		return;
+	}
+	remove(file.c_str());
+	std::string deleted = "HTTP/1.1 204 No Content\r\n"
+		"Content-Length: 0\r\n"
+		"\r\n";
+	send(client->getFd(), deleted.c_str(), deleted.size(), 0);
 }

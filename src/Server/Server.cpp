@@ -115,15 +115,19 @@ void Server::readClient(Client *client) {
 		return;
 	}
 
-	if (req.method == "GET")
-		handleGet(req, client, route);
-	else if (req.method == "POST")
-		handlePost(req, client, route);
-	else {
+	size_t i = 0;	
+	for (; i < route->allowedMethods.size(); i++) {
+		if (route->allowedMethods[i] ==  req.method) {
+			handleMethods(req, client, route);
+			break;
+		}
+	}
+	if (i >= route->allowedMethods.size()) {
 		send(client->getFd(), Response::error405().c_str(), Response::error405().size(), 0);
 		client->clearData();
 		return;
 	}
+
 	std::cout << "Method:  " << req.method  << std::endl;
 	std::cout << "Path:    " << req.path    << std::endl;
 	std::cout << "Version: " << req.version << std::endl;
