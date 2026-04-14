@@ -90,6 +90,15 @@ ServerConfig Config::parseServer(const std::vector<std::string> &tokens,
             if (i >= tokens.size() || tokens[i] != ";")
                 throw std::runtime_error("Expected ';' after host value");
             i++;
+        } else if (tokens[i] == "error_directory") {
+            i++;
+            if (i >= tokens.size())
+                throw std::runtime_error("Expected value after 'error_directory'");
+            server.errorDir = tokens[i];
+            i++;
+            if (i >= tokens.size() || tokens[i] != ";")
+                throw std::runtime_error("Expected ';' after error directory value");
+            i++;
         } else if (tokens[i] == "location") {
             i++;
             server.routes.push_back(parseRoute(tokens, i));

@@ -47,7 +47,8 @@ void Server::handlePost(Request req, Client *client, RouteConfig *route) {
 	std::stringstream newFile;
 	newFile << route->uploadPath << "/post" << i; 
 	if (!directoryExists(route->uploadPath.c_str())) {
-		send(client->getFd(), Response::error404().c_str(), Response::error404().size(), 0);
+		std::string err = Response::error("404", _configs.errorDir);
+		send(client->getFd(), err.c_str(), err.size(), 0);
 		return;
 	}
 	for (; access(newFile.str().c_str(), F_OK) == 0; i++) {
@@ -70,7 +71,8 @@ void Server::handleDelete(Request req, Client *client, RouteConfig *route)
 {
 	std::string file = route->documentRoot + req.path;
 	if (!fileExists(file)) {
-		send(client->getFd(), Response::error404().c_str(), Response::error404().size(), 0);
+		std::string err = Response::error("404", _configs.errorDir);
+		send(client->getFd(), err.c_str(), err.size(), 0);
 		return;
 	}
 	remove(file.c_str());
