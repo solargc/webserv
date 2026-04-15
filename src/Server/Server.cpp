@@ -12,31 +12,32 @@
 Server::Server(const std::vector<ServerConfig> &configs) : _configs(configs) {
     for (size_t i = 0; i < configs.size(); i++) {
         int fd = createListenSocket(configs[i]);
-        registerFd(fd);
+        registerFd(fd, configs[i]);
         std::cout << "Server listening on " << configs[i].host << ":" << configs[i].port << std::endl;
     }
 }
 
 Server::~Server() {
-    for (size_t i = 0; i < clients.size(); i++)
+    for (size_t i = 0; i < clients.size(); i++) {
         delete clients[i];
-    for (size_t i = 0; i < listenFds.size(); i++)
-        close(listenFds[i]);
+	}
+	for (std::map<int, const ServerConfig*>::iterator it = listenFdToConfig.begin();
+		it != listenFdToConfig.end(); it++) {
+		close(it->first);
+	}
 }
 
-void Server::registerFd(int fd) {
+void Server::registerFd(int fd, const ServerConfig& config) {
     pollfd pfd = {};
     pfd.fd = fd;
     pfd.events = POLLIN;
     fds.push_back(pfd);
-    listenFds.push_back(fd);
+
+	listenFdToConfig[fd] = &config;
 }
 
 bool Server::isListenSocket(int fd) const {
-    for (size_t i = 0; i < listenFds.size(); i++)
-        if (listenFds[i] == fd)
-            return true;
-    return false;
+    return listenFdToConfig.find(fd) != listenFdToConfig.end();
 }
 
 void Server::acceptClient(int listenFd) {
@@ -47,7 +48,8 @@ void Server::acceptClient(int listenFd) {
     pfd.fd = fd;
     pfd.events = POLLIN;
     fds.push_back(pfd);
-    clients.push_back(new Client(fd));
+	const ServerConfig* config = listenFdToConfig[listenFd];
+	clients.push_back(new Client(fd, config));
 }
 
 bool Server::isRequestComplete(const std::string &buf) const {
@@ -75,12 +77,10 @@ bool Server::isRequestComplete(const std::string &buf) const {
 	return (buf.size() - bodyPos == conLen);
 }
 
-RouteConfig *Server::findRoute(const Request& req) {
-	for (size_t i = 0; i < _configs.size(); i++) {
-		for (size_t j = 0; j < _configs[i].routes.size(); j++) {
-			if (req.path.find(_configs[i].routes[j].path) == 0)
-				return &_configs[i].routes[j];
-		}
+const RouteConfig *Server::findRoute(const Request& req, const ServerConfig* config) {
+		for (size_t i = 0; i < config->routes.size(); i++) {
+			if (req.path.find(config->routes[i].path) == 0)
+				return &config->routes[i];
 	}
 	return NULL;
 }
@@ -99,7 +99,7 @@ void Server::readClient(Client *client) {
 		return;
 
 	if (!isRequestComplete(buf))
-		return;	
+		return;
 
 	Request req;
 	if (!req.parse(buf)) {
@@ -108,23 +108,25 @@ void Server::readClient(Client *client) {
 		return;
 	}
 
-	RouteConfig *route = findRoute(req);
+	const ServerConfig* config = client->getServerConfig();
+	const RouteConfig *route = findRoute(req, config);
 	if (route == NULL) {
-		std::string err = Response::error("404", _configs.errorDir);
+		std::string err = Response::error("404", config->errorDir);
 		send(client->getFd(), err.c_str(), err.size(), 0);
 		client->clearData();
 		return;
 	}
 
-	size_t i = 0;	
+	size_t i = 0;
 	for (; i < route->allowedMethods.size(); i++) {
 		if (route->allowedMethods[i] ==  req.method) {
-			handleMethods(req, client, route);
+			handleMethods(req, client, route, config);
 			break;
 		}
 	}
+
 	if (i >= route->allowedMethods.size()) {
-		std::string err = Response::error("405", _configs.errorDir);
+		std::string err = Response::error("405", config->errorDir);
 		send(client->getFd(), err.c_str(), err.size(), 0);
 		client->clearData();
 		return;

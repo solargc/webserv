@@ -12,6 +12,9 @@ class Response {
     Response(const Request &req, const RouteConfig &route);
 
 	// Errors
+	static std::string error(std::string code, std::string errorDir);
+
+	static std::string defaultError(std::string code);
 	static std::string error404();
 	static std::string error405();
 

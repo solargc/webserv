@@ -22,19 +22,20 @@ bool Server::fileExists(const std::string& filename) {
     return file.good();
 }
 
-void Server::handleGet(Request req, Client *client, RouteConfig *route) {
+void Server::handleGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
+	(void)config;
 	Response response(req, *route);
 	std::string raw = response.getRaw();
 	send(client->getFd(), raw.c_str(), raw.size(), 0); // send() is the couterpart to recv()
 }
 
-void Server::handleMethods(Request req, Client *client, RouteConfig *route) {
+void Server::handleMethods(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
 	if (req.method == "GET")
-		handleGet(req, client, route);
+		handleGet(req, client, route, config);
 	else if (req.method == "POST")
-		handlePost(req, client, route);
+		handlePost(req, client, route, config);
 	else if (req.method == "DELETE")
-		handleDelete(req, client, route);
+		handleDelete(req, client, route, config);
 	else {
 		send(client->getFd(), Response::error405().c_str(), Response::error405().size(), 0);
 		client->clearData();
@@ -42,12 +43,12 @@ void Server::handleMethods(Request req, Client *client, RouteConfig *route) {
 	}
 }
 
-void Server::handlePost(Request req, Client *client, RouteConfig *route) {
+void Server::handlePost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
 	int i = 1;
 	std::stringstream newFile;
 	newFile << route->uploadPath << "/post" << i; 
 	if (!directoryExists(route->uploadPath.c_str())) {
-		std::string err = Response::error("404", _configs.errorDir);
+		std::string err = Response::error("404", config->errorDir);
 		send(client->getFd(), err.c_str(), err.size(), 0);
 		return;
 	}
@@ -67,11 +68,11 @@ void Server::handlePost(Request req, Client *client, RouteConfig *route) {
 }
 
 
-void Server::handleDelete(Request req, Client *client, RouteConfig *route)
+void Server::handleDelete(Request req, Client *client, const RouteConfig *route, const ServerConfig* config)
 {
 	std::string file = route->documentRoot + req.path;
 	if (!fileExists(file)) {
-		std::string err = Response::error("404", _configs.errorDir);
+		std::string err = Response::error("404", config->errorDir);
 		send(client->getFd(), err.c_str(), err.size(), 0);
 		return;
 	}
