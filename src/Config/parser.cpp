@@ -90,14 +90,14 @@ ServerConfig Config::parseServer(const std::vector<std::string> &tokens,
             if (i >= tokens.size() || tokens[i] != ";")
                 throw std::runtime_error("Expected ';' after host value");
             i++;
-        } else if (tokens[i] == "error_directory") {
+        } else if (tokens[i] == "status_directory") {
             i++;
             if (i >= tokens.size())
-                throw std::runtime_error("Expected value after 'error_directory'");
-            server.errorDir = tokens[i];
+                throw std::runtime_error("Expected value after 'status_directory'");
+            server.statusDir = tokens[i];
             i++;
             if (i >= tokens.size() || tokens[i] != ";")
-                throw std::runtime_error("Expected ';' after error directory value");
+                throw std::runtime_error("Expected ';' after status directory value");
             i++;
         } else if (tokens[i] == "location") {
             i++;

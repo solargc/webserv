@@ -111,7 +111,7 @@ void Server::readClient(Client *client) {
 	const ServerConfig* config = client->getServerConfig();
 	const RouteConfig *route = findRoute(req, config);
 	if (route == NULL) {
-		std::string err = Response::error("404", config->errorDir);
+		std::string err = Response::status("404", config->statusDir);
 		send(client->getFd(), err.c_str(), err.size(), 0);
 		client->clearData();
 		return;
@@ -126,7 +126,7 @@ void Server::readClient(Client *client) {
 	}
 
 	if (i >= route->allowedMethods.size()) {
-		std::string err = Response::error("405", config->errorDir);
+		std::string err = Response::status("405", config->statusDir);
 		send(client->getFd(), err.c_str(), err.size(), 0);
 		client->clearData();
 		return;

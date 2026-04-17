@@ -9,17 +9,20 @@
 
 class Response {
   public:
-    Response(const Request &req, const RouteConfig &route);
+    Response(const Request &req, const RouteConfig &route, std::string statusDir);
 
 	// Errors
-	static std::string error(std::string code, std::string errorDir);
+	static std::string status(std::string code, std::string statusDir);
+	static std::string status(std::string code, std::string statusDir, std::ifstream &file200);
 
-	static std::string defaultError(std::string code);
-	static std::string error404();
-	static std::string error405();
+	static std::string defaultStatus(std::string code);
+	static std::string status200(std::ifstream &file);
+	static std::string status201();
+	static std::string status404();
+	static std::string status405();
 
     const std::string &getRaw() const;
   private:
     std::string raw;
-    void compose(const Request &req, const RouteConfig &route);
+    void compose(const Request &req, const RouteConfig &route, std::string statusDir);
 };

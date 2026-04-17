@@ -33,8 +33,15 @@ class Server {
 
 	// methods
 	void handleMethods(Request req, Client *client, const RouteConfig *route, const ServerConfig* config);
+
 	void handleGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config);
+	void CGIGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config);
+	void StaticGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config);
+
 	void handlePost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config);
+	void CGIPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config);
+	void StaticPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config);
+
 	void handleDelete(Request req, Client *client, const RouteConfig *route, const ServerConfig* config);
 };
 

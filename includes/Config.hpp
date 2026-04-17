@@ -15,7 +15,7 @@ struct RouteConfig {
 struct ServerConfig {
     std::string host;
     int port;
-	std::string errorDir;
+	std::string statusDir;
     std::vector<RouteConfig> routes;
 };
 

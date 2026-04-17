@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <cstdio>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 bool Server::directoryExists(const char* path) {
@@ -22,13 +23,6 @@ bool Server::fileExists(const std::string& filename) {
     return file.good();
 }
 
-void Server::handleGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
-	(void)config;
-	Response response(req, *route);
-	std::string raw = response.getRaw();
-	send(client->getFd(), raw.c_str(), raw.size(), 0); // send() is the couterpart to recv()
-}
-
 void Server::handleMethods(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
 	if (req.method == "GET")
 		handleGet(req, client, route, config);
@@ -37,18 +31,33 @@ void Server::handleMethods(Request req, Client *client, const RouteConfig *route
 	else if (req.method == "DELETE")
 		handleDelete(req, client, route, config);
 	else {
-		send(client->getFd(), Response::error405().c_str(), Response::error405().size(), 0);
-		client->clearData();
+		std::string err = Response::status("405", config->statusDir);
+		send(client->getFd(), err.c_str(), err.size(), 0);
 		return;
 	}
 }
 
 void Server::handlePost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
+	if (req.path.size() < 3 || req.path.substr(req.path.size() - 3) == ".py")
+		CGIPost(req, client, route, config);
+	else
+		StaticPost(req, client, route, config);
+}
+
+void Server::CGIPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
+	(void)client;
+	(void)route;
+	(void)req;
+	(void)config;
+	std::cout << "TEMPORARY POOP" <<std::endl;
+}
+
+void Server::StaticPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
 	int i = 1;
 	std::stringstream newFile;
 	newFile << route->uploadPath << "/post" << i; 
 	if (!directoryExists(route->uploadPath.c_str())) {
-		std::string err = Response::error("404", config->errorDir);
+		std::string err = Response::status("404", config->statusDir);
 		send(client->getFd(), err.c_str(), err.size(), 0);
 		return;
 	}
@@ -60,19 +69,55 @@ void Server::handlePost(Request req, Client *client, const RouteConfig *route, c
 	std::ofstream outNewFile(newFile.str().c_str());
 	outNewFile << req.body;
 	outNewFile.close();
-
-	std::string created = "HTTP/1.1 201 Created\r\n"
-		"Content-Length: 0\r\n"
-		"\r\n";
-	send(client->getFd(), created.c_str(), created.size(), 0);
+	
+	std::string res = Response::status("201", config->statusDir);
+	send(client->getFd(), res.c_str(), res.size(), 0);
 }
 
+void Server::handleGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
+	if (req.path.size() < 3 || req.path.substr(req.path.size() - 3) == ".py")
+		CGIGet(req, client, route, config);
+	else
+		StaticGet(req, client, route, config);
+}
 
-void Server::handleDelete(Request req, Client *client, const RouteConfig *route, const ServerConfig* config)
-{
+void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
+	(void)config;
+	(void)client;
+	int pipefd[2];
+	pipe(pipefd);
+	pid_t pid = fork();
+	if (pid == 0) {
+		close(pipefd[0]);
+		dup2(pipefd[1], STDOUT_FILENO);
+		close(pipefd[1]);
+		std::string file = route->documentRoot + req.path;
+		char *argv[] = {(char*)"/usr/bin/python3", const_cast<char*>(file.c_str()), NULL};
+		char *envp[] = {NULL};
+		execve("/usr/bin/python3", argv, envp);
+	}
+	else {
+		close(pipefd[1]);
+		char buf[4096];
+		int n = read(pipefd[0], buf, sizeof(buf));
+		buf[n] = '\0';
+		std::cout << buf << std::endl;
+		waitpid(pid, NULL, 0);
+	}
+}
+
+void Server::StaticGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
+	(void)config;
+	Response response(req, *route, config->statusDir);
+	std::string raw = response.getRaw();
+	send(client->getFd(), raw.c_str(), raw.size(), 0); // send() is the couterpart to recv()
+}
+
+void Server::handleDelete(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
+	(void)config;
 	std::string file = route->documentRoot + req.path;
 	if (!fileExists(file)) {
-		std::string err = Response::error("404", config->errorDir);
+		std::string err = Response::status("404", config->statusDir);
 		send(client->getFd(), err.c_str(), err.size(), 0);
 		return;
 	}
