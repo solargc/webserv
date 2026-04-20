@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pascal & Jacobus' Webserv</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      padding: 2rem;
+    }
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 500;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 1rem;
+    }
+    .section {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .section h2 {
+      font-size: 1rem;
+      font-weight: 500;
+      margin-bottom: 1rem;
+      color: #444;
+    }
+    button {
+      background: white;
+      border: 1px solid #aaa;
+      border-radius: 6px;
+      padding: 0.5rem 1.2rem;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    button:hover { background: #f0f0f0; }
+    input[type="text"] {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 0.4rem 0.8rem;
+      font-size: 0.95rem;
+      margin-right: 0.5rem;
+      width: 200px;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .response {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      background: #f9f9f9;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      color: #333;
+      min-height: 2rem;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Pascal and Jacobus' webserv</h1>
+
+  <div class="section">
+    <h2>Hello World</h2>
+    <button onclick="helloWorld()">Run helloWorld.py</button>
+    <div class="response" id="helloResponse"></div>
+  </div>
+
+  <div class="section">
+    <h2>Addition</h2>
+    <div class="row">
+      <input type="text" id="addInput" placeholder="e.g. 3+5" />
+      <button onclick="doAddition()">Run addition.py</button>
+    </div>
+    <div class="response" id="addResponse"></div>
+  </div>
+
+  <div class="section">
+    <h2>Print string</h2>
+    <div class="row">
+      <input type="text" id="strInput" placeholder="Enter a string" />
+      <button onclick="doPrintString()">Run printString.py</button>
+    </div>
+    <div class="response" id="strResponse"></div>
+  </div>
+
+  <div class="section">
+    <h2>Static post</h2>
+    <div class="row">
+      <input type="text" id="staticInput" placeholder="Enter text to save" />
+      <button onclick="doStaticPost()">POST</button>
+    </div>
+    <div class="response" id="staticResponse"></div>
+  </div>
+
+  <div class="section">
+    <h2>Delete</h2>
+    <div class="row">
+      <input type="text" id="deleteInput" placeholder="e.g. posts/post1" />
+      <button onclick="doDelete()">DELETE</button>
+    </div>
+    <div class="response" id="deleteResponse"></div>
+  </div>
+
+  <script>
+    async function doDelete() {
+      const el = document.getElementById('deleteResponse');
+      const val = document.getElementById('deleteInput').value;
+      el.textContent = 'Loading...';
+      try {
+        const res = await fetch('/' + val, { method: 'DELETE' });
+        el.textContent = 'Status: ' + res.status + ' ' + res.statusText;
+      } catch(e) {
+        el.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    async function doStaticPost() {
+      const el = document.getElementById('staticResponse');
+      const val = document.getElementById('staticInput').value;
+      el.textContent = 'Loading...';
+      try {
+        const res = await fetch('/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: val
+        });
+        el.textContent = 'Status: ' + res.status + ' ' + res.statusText;
+      } catch(e) {
+        el.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    async function helloWorld() {
+      const el = document.getElementById('helloResponse');
+      el.textContent = 'Loading...';
+      try {
+        const res = await fetch('/python/helloWorld.py');
+        el.textContent = await res.text();
+      } catch(e) {
+        el.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    async function doAddition() {
+      const el = document.getElementById('addResponse');
+      const val = document.getElementById('addInput').value;
+      el.textContent = 'Loading...';
+      try {
+        const res = await fetch('/python/addition.py', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: val
+        });
+        el.textContent = await res.text();
+      } catch(e) {
+        el.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    async function doPrintString() {
+      const el = document.getElementById('strResponse');
+      const val = document.getElementById('strInput').value;
+      el.textContent = 'Loading...';
+      try {
+        const res = await fetch('/python/printString.py', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: val
+        });
+        el.textContent = await res.text();
+      } catch(e) {
+        el.textContent = 'Error: ' + e.message;
+      }
+    }
+  </script>
+
+</body>
+</html>

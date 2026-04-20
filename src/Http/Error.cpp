@@ -10,7 +10,7 @@ std::string Response::status200(std::ifstream& file) {
 	std::string fileSize = ss.str();
 
 	std::string status = "HTTP/1.1 200 OK\r\n";
-	status += "Content-Type: text/plain\r\n";
+	status += "Content-Type: text/html\r\n";
 	status += "Content-Length: " + fileSize + "\r\n";
 	status += "\r\n";
 	status += fileContent;
@@ -19,7 +19,7 @@ std::string Response::status200(std::ifstream& file) {
 
 std::string Response::status200(std::string file) {
 	std::string status = "HTTP/1.1 200 OK\r\n";
-	status += "Content-Type: text/plain\r\n";
+	status += "Content-Type: text/html\r\n";
 	status += "Content-Length: ";
 	std::ostringstream oss;
 	oss << file.size();
@@ -33,7 +33,7 @@ std::string Response::status200(std::string file) {
 std::string Response::status201() {
 	std::string status = "HTTP/1.1 201 Created\r\n"
 		"Content-Type: text/plain\r\n"
-		"Content-Length: 22\r\n"
+		"Content-Length: 11\r\n"
 		"\r\n"
 		"201 Created";
 		return status;

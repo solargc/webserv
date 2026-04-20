@@ -33,15 +33,14 @@ void Server::handleMethods(Request req, Client *client, const RouteConfig *route
 	else {
 		std::string err = Response::status("405", config->statusDir);
 		send(client->getFd(), err.c_str(), err.size(), 0);
-		return;
 	}
 }
 
 void Server::handlePost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
-	if (req.path.size() < 3 || req.path.substr(req.path.size() - 3) == ".py")
-		CGIPost(req, client, route, config);
-	else
+	if (req.path.size() < 3 || req.path.substr(req.path.size() - 3) != ".py")
 		StaticPost(req, client, route, config);
+	else
+		CGIPost(req, client, route, config);
 }
 
 void Server::CGIPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
@@ -77,6 +76,7 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 }
 
 void Server::StaticPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
+	std::cout << "static post entered" << std::endl;
 	int i = 1;
 	std::stringstream newFile;
 	newFile << route->uploadPath << "/post" << i; 
