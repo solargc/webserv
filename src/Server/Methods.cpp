@@ -45,11 +45,35 @@ void Server::handlePost(Request req, Client *client, const RouteConfig *route, c
 }
 
 void Server::CGIPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
-	(void)client;
-	(void)route;
-	(void)req;
-	(void)config;
-	std::cout << "TEMPORARY POOP" <<std::endl;
+	int stdinPipe[2];
+	int stdoutPipe[2];
+	pipe(stdinPipe);
+	pipe(stdoutPipe);
+	pid_t pid = fork();
+	if (pid == 0) {
+		close(stdinPipe[1]);
+		close(stdoutPipe[0]);
+		dup2(stdinPipe[0], STDIN_FILENO);
+		dup2(stdoutPipe[1], STDOUT_FILENO);
+		close(stdinPipe[0]);
+		close(stdoutPipe[1]);
+		std::string file = route->documentRoot + req.path;
+		char *argv[] = {(char*)"/usr/bin/python3", const_cast<char*>(file.c_str()), NULL};
+		char *envp[] = {NULL};
+		execve("/usr/bin/python3", argv, envp);
+	}
+	else {
+		close(stdinPipe[0]);
+		close(stdoutPipe[1]);
+		write(stdinPipe[1], req.body.c_str(), req.body.size());
+		close(stdinPipe[1]);
+		char buf[4096];
+		int n = read(stdoutPipe[0], buf, sizeof(buf));
+		buf[n] = '\0';
+		waitpid(pid, NULL, 0);
+		std::string res = Response::status("200", config->statusDir, buf);
+		send(client->getFd(), res.c_str(), res.size(), 0);
+	}
 }
 
 void Server::StaticPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
@@ -75,15 +99,13 @@ void Server::StaticPost(Request req, Client *client, const RouteConfig *route, c
 }
 
 void Server::handleGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
-	if (req.path.size() < 3 || req.path.substr(req.path.size() - 3) == ".py")
-		CGIGet(req, client, route, config);
-	else
+	if (req.path.size() < 3 || req.path.substr(req.path.size() - 3) != ".py")
 		StaticGet(req, client, route, config);
+	else
+		CGIGet(req, client, route, config);
 }
 
 void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
-	(void)config;
-	(void)client;
 	int pipefd[2];
 	pipe(pipefd);
 	pid_t pid = fork();
@@ -103,18 +125,18 @@ void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const
 		buf[n] = '\0';
 		std::cout << buf << std::endl;
 		waitpid(pid, NULL, 0);
+		std::string res = Response::status("200", config->statusDir, buf);
+		send(client->getFd(), res.c_str(), res.size(), 0);
 	}
 }
 
 void Server::StaticGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
-	(void)config;
 	Response response(req, *route, config->statusDir);
 	std::string raw = response.getRaw();
 	send(client->getFd(), raw.c_str(), raw.size(), 0); // send() is the couterpart to recv()
 }
 
 void Server::handleDelete(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
-	(void)config;
 	std::string file = route->documentRoot + req.path;
 	if (!fileExists(file)) {
 		std::string err = Response::status("404", config->statusDir);
@@ -122,8 +144,6 @@ void Server::handleDelete(Request req, Client *client, const RouteConfig *route,
 		return;
 	}
 	remove(file.c_str());
-	std::string deleted = "HTTP/1.1 204 No Content\r\n"
-		"Content-Length: 0\r\n"
-		"\r\n";
-	send(client->getFd(), deleted.c_str(), deleted.size(), 0);
+	std::string res = Response::status("204", config->statusDir);
+	send(client->getFd(), res.c_str(), res.size(), 0);
 }
