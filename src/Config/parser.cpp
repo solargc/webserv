@@ -77,6 +77,8 @@ ServerConfig Config::parseServer(const std::vector<std::string> &tokens,
                 if (!std::isdigit(tokens[i][j]))
                     throw std::runtime_error("Invalid port: " + tokens[i]);
             server.port = std::atoi(tokens[i].c_str());
+            if (server.port < 1 || server.port > 65535)
+                throw std::runtime_error("Port out of range: " + tokens[i]);
             i++;
             if (i >= tokens.size() || tokens[i] != ";")
                 throw std::runtime_error("Expected ';' after listen value");
