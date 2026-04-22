@@ -46,8 +46,18 @@ void Server::handlePost(Request req, Client *client, const RouteConfig *route, c
 void Server::CGIPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
 	int stdinPipe[2];
 	int stdoutPipe[2];
-	pipe(stdinPipe);
-	pipe(stdoutPipe);
+	if (pipe(stdinPipe) < 0) {
+		std::string err = Response::status("500", config->statusDir);
+		send(client->getFd(), err.c_str(), err.size(), 0);
+		return;
+	}
+	if (pipe(stdoutPipe) < 0) {
+		close(stdinPipe[0]);
+		close(stdinPipe[1]);
+		std::string err = Response::status("500", config->statusDir);
+		send(client->getFd(), err.c_str(), err.size(), 0);
+		return;
+	}
 	pid_t pid = fork();
 	if (pid == 0) {
 		close(stdinPipe[1]);
@@ -108,7 +118,11 @@ void Server::handleGet(Request req, Client *client, const RouteConfig *route, co
 
 void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
 	int pipefd[2];
-	pipe(pipefd);
+	if (pipe(pipefd) < 0) {
+		std::string err = Response::status("500", config->statusDir);
+		send(client->getFd(), err.c_str(), err.size(), 0);
+		return;
+	}
 	pid_t pid = fork();
 	if (pid == 0) {
 		close(pipefd[0]);
