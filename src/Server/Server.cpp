@@ -8,12 +8,13 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <cstdlib>
+#include <cerrno>
 
 Server::Server(const std::vector<ServerConfig> &configs) : _configs(configs) {
-    for (size_t i = 0; i < configs.size(); i++) {
-        int fd = createListenSocket(configs[i]);
-        registerFd(fd, configs[i]);
-        std::cout << "Server listening on " << configs[i].host << ":" << configs[i].port << std::endl;
+    for (size_t i = 0; i < _configs.size(); i++) {
+        int fd = createListenSocket(_configs[i]);
+        registerFd(fd, _configs[i]);
+        std::cout << "Server listening on " << _configs[i].host << ":" << _configs[i].port << std::endl;
     }
 }
 
@@ -73,8 +74,12 @@ bool Server::isRequestComplete(const std::string &buf) const {
 	if (bodyPos == std::string::npos)
 		return false;
 	bodyPos += 4;
-	size_t conLen = std::atol(buf.substr(pos, end).c_str());
-	return (buf.size() - bodyPos == conLen);
+	std::string lenStr = buf.substr(pos, end);
+	char *endptr;
+	unsigned long conLen = std::strtoul(lenStr.c_str(), &endptr, 10);
+	if (*endptr != '\0')
+		return false;
+	return (buf.size() - bodyPos == static_cast<size_t>(conLen));
 }
 
 const RouteConfig *Server::findRoute(const Request& req, const ServerConfig* config) {
@@ -159,18 +164,27 @@ void Server::removeClient(Client *client) {
 
 void Server::run() {
     while (true) {
-        if (poll(&fds[0], fds.size(), -1) < 0)
-            throw std::runtime_error("poll() failed");
+        if (fds.empty())
+            throw std::runtime_error("No sockets configured");
 
-        for (size_t i = 0; i < fds.size(); i++) {
-            if (!(fds[i].revents & POLLIN))
+        int ret = poll(&fds[0], fds.size(), -1);
+        if (ret < 0) {
+            if (errno == EINTR)
                 continue;
-            if (isListenSocket(fds[i].fd))
-                acceptClient(fds[i].fd);
-            else {
+            throw std::runtime_error("poll() failed");
+        }
+
+        std::vector<pollfd> ready(fds.begin(), fds.end());
+        for (size_t i = 0; i < ready.size(); i++) {
+            if (!(ready[i].revents & POLLIN))
+                continue;
+            int fd = ready[i].fd;
+            if (isListenSocket(fd)) {
+                acceptClient(fd);
+            } else {
                 Client *client = NULL;
                 for (size_t j = 0; j < clients.size(); j++)
-                    if (clients[j]->getFd() == fds[i].fd)
+                    if (clients[j]->getFd() == fd)
                         client = clients[j];
                 if (client)
                     readClient(client);
