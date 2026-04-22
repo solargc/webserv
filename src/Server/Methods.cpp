@@ -9,6 +9,23 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+static bool isSafePath(const std::string &path) {
+    size_t i = 0;
+    while (i < path.size()) {
+        // find next slash or start
+        size_t seg = path.find('/', i);
+        std::string part = (seg == std::string::npos)
+            ? path.substr(i)
+            : path.substr(i, seg - i);
+        if (part == "..")
+            return false;
+        if (seg == std::string::npos)
+            break;
+        i = seg + 1;
+    }
+    return true;
+}
+
 bool Server::directoryExists(const char* path) {
     struct stat info;
 
@@ -24,6 +41,11 @@ bool Server::fileExists(const std::string& filename) {
 }
 
 void Server::handleMethods(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
+	if (!isSafePath(req.path)) {
+		std::string err = Response::status("400", config->statusDir);
+		send(client->getFd(), err.c_str(), err.size(), 0);
+		return;
+	}
 	if (req.method == "GET")
 		handleGet(req, client, route, config);
 	else if (req.method == "POST")
