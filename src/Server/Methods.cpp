@@ -67,7 +67,8 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 		write(stdinPipe[1], req.body.c_str(), req.body.size());
 		close(stdinPipe[1]);
 		char buf[4096];
-		int n = read(stdoutPipe[0], buf, sizeof(buf));
+		int n = read(stdoutPipe[0], buf, sizeof(buf) - 1);
+		if (n < 0) n = 0;
 		buf[n] = '\0';
 		waitpid(pid, NULL, 0);
 		std::string res = Response::status("200", config->statusDir, buf);
@@ -121,7 +122,8 @@ void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const
 	else {
 		close(pipefd[1]);
 		char buf[4096];
-		int n = read(pipefd[0], buf, sizeof(buf));
+		int n = read(pipefd[0], buf, sizeof(buf) - 1);
+		if (n < 0) n = 0;
 		buf[n] = '\0';
 		std::cout << buf << std::endl;
 		waitpid(pid, NULL, 0);
