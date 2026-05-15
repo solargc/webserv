@@ -17,7 +17,7 @@ SRCS		= main.cpp \
 			  Server/Methods.cpp \
 			  Http/Request.cpp \
 			  Http/Response.cpp \
-			  Http/Error.cpp
+			  Http/Returns.cpp
 
 OBJS		= $(addprefix $(OBJ_DIR)/, $(SRCS:.cpp=.o))
 

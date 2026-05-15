@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <stdexcept>
 #include <sys/socket.h>
+#include <fcntl.h>
 
 static int createTcpSocket() {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -33,7 +34,9 @@ int createListenSocket(const ServerConfig &cfg) {
     sockaddr_in addr = resolveAddress(cfg);
     if (bind(fd, (sockaddr *)&addr, sizeof(addr)) < 0)
         throw std::runtime_error("bind() failed");
-    if (listen(fd, 128) < 0)
+    if (listen(fd, 128) < 0) {
         throw std::runtime_error("listen() failed");
+	}
+	fcntl(fd, F_SETFL, O_NONBLOCK);
     return fd;
 }

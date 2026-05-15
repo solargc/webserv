@@ -30,51 +30,34 @@ std::string Response::status200(std::string file) {
 	return status;
 }
 
-std::string Response::status201() {
-	std::string status = "HTTP/1.1 201 Created\r\n"
-		"Content-Type: text/plain\r\n"
-		"Content-Length: 11\r\n"
-		"\r\n"
-		"201 Created";
-		return status;
-}
+std::string Response::formResponse(std::string type) {
+	std::string html = "<html>\n"
+		"\t<body>\n"
+		"\t\t<h1>" + type + "</h1>\n"
+		"\t</body>\n"
+		"</html>";
 
-std::string Response::status204() {
-	std::string status = "HTTP/1.1 204 No Content\r\n"
-		"Content-Type: text/plain\r\n"
-		"Content-Length: 14\r\n"
-		"\r\n"
-		"204 No Content";
-		return status;
-}
+	size_t htmlSize = html.size();
+	std::stringstream ss;
+	ss << htmlSize;
 
-std::string Response::status404() {
-	std::string status = "HTTP/1.1 404 Not Found\r\n"
-		"Content-Type: text/plain\r\n"
-		"Content-Length: 13\r\n"
-		"\r\n"
-		"404 Not Found";
-		return status;
-}
+	std::string status = "HTTP/1.1 " + type + "\r\n"
+		"Content-Type: text/html\r\n"
+		"Content-Length: " + ss.str() + "\r\n"
+		"\r\n" + html;
 
-std::string Response::status405() {
-	std::string status = "HTTP/1.1 405 Method Not Allowed\r\n"
-		"Content-Type: text/plain\r\n"
-		"Content-Length: 22\r\n"
-		"\r\n"
-		"405 Method not allowed";
-		return status;
+	return status;
 }
 
 std::string Response::defaultStatus(std::string code) {
 	if (code == "404")
-		return status404();
+		return formResponse("404 Not Found");
 	else if (code == "405")
-		return status405();
+		return formResponse("405 Method not allowed");
 	else if (code == "201")
-		return status201();
+		return formResponse("201 Created");
 	else
-		return status204();
+		return formResponse("204 No Content");
 }
 
 std::string Response::status(std::string code, std::string statusDir, std::ifstream& file200) {

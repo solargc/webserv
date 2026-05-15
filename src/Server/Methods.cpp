@@ -43,7 +43,7 @@ bool Server::fileExists(const std::string& filename) {
 void Server::handleMethods(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
 	if (!isSafePath(req.path)) {
 		std::string err = Response::status("400", config->statusDir);
-		send(client->getFd(), err.c_str(), err.size(), 0);
+		client->appendSendData(err);
 		return;
 	}
 	if (req.method == "GET")
@@ -54,7 +54,7 @@ void Server::handleMethods(Request req, Client *client, const RouteConfig *route
 		handleDelete(req, client, route, config);
 	else {
 		std::string err = Response::status("405", config->statusDir);
-		send(client->getFd(), err.c_str(), err.size(), 0);
+		client->appendSendData(err);
 	}
 }
 
@@ -70,14 +70,14 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 	int stdoutPipe[2];
 	if (pipe(stdinPipe) < 0) {
 		std::string err = Response::status("500", config->statusDir);
-		send(client->getFd(), err.c_str(), err.size(), 0);
+		client->appendSendData(err);
 		return;
 	}
 	if (pipe(stdoutPipe) < 0) {
 		close(stdinPipe[0]);
 		close(stdinPipe[1]);
 		std::string err = Response::status("500", config->statusDir);
-		send(client->getFd(), err.c_str(), err.size(), 0);
+		client->appendSendData(err);
 		return;
 	}
 	pid_t pid = fork();
@@ -104,7 +104,7 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 		buf[n] = '\0';
 		waitpid(pid, NULL, 0);
 		std::string res = Response::status("200", config->statusDir, buf);
-		send(client->getFd(), res.c_str(), res.size(), 0);
+		client->appendSendData(res);
 	}
 }
 
@@ -115,7 +115,7 @@ void Server::StaticPost(Request req, Client *client, const RouteConfig *route, c
 	newFile << route->uploadPath << "/post" << i; 
 	if (!directoryExists(route->uploadPath.c_str())) {
 		std::string err = Response::status("404", config->statusDir);
-		send(client->getFd(), err.c_str(), err.size(), 0);
+		client->appendSendData(err);
 		return;
 	}
 	for (; access(newFile.str().c_str(), F_OK) == 0; i++) {
@@ -128,7 +128,7 @@ void Server::StaticPost(Request req, Client *client, const RouteConfig *route, c
 	outNewFile.close();
 	
 	std::string res = Response::status("201", config->statusDir);
-	send(client->getFd(), res.c_str(), res.size(), 0);
+	client->appendSendData(res);
 }
 
 void Server::handleGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
@@ -142,7 +142,7 @@ void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const
 	int pipefd[2];
 	if (pipe(pipefd) < 0) {
 		std::string err = Response::status("500", config->statusDir);
-		send(client->getFd(), err.c_str(), err.size(), 0);
+		client->appendSendData(err);
 		return;
 	}
 	pid_t pid = fork();
@@ -164,24 +164,24 @@ void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const
 		std::cout << buf << std::endl;
 		waitpid(pid, NULL, 0);
 		std::string res = Response::status("200", config->statusDir, buf);
-		send(client->getFd(), res.c_str(), res.size(), 0);
+		client->appendSendData(res);
 	}
 }
 
 void Server::StaticGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
 	Response response(req, *route, config->statusDir);
 	std::string raw = response.getRaw();
-	send(client->getFd(), raw.c_str(), raw.size(), 0); // send() is the couterpart to recv()
+	client->appendSendData(raw);
 }
 
 void Server::handleDelete(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
 	std::string file = route->documentRoot + req.path;
 	if (!fileExists(file)) {
 		std::string err = Response::status("404", config->statusDir);
-		send(client->getFd(), err.c_str(), err.size(), 0);
+		client->appendSendData(err);
 		return;
 	}
 	remove(file.c_str());
 	std::string res = Response::status("204", config->statusDir);
-	send(client->getFd(), res.c_str(), res.size(), 0);
+	client->appendSendData(res);
 }

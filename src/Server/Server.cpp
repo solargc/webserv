@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <cerrno>
+#include <fcntl.h>
 
 Server::Server(const std::vector<ServerConfig> &configs) : _configs(configs) {
     for (size_t i = 0; i < _configs.size(); i++) {
@@ -43,6 +44,7 @@ bool Server::isListenSocket(int fd) const {
 
 void Server::acceptClient(int listenFd) {
     int fd = accept(listenFd, NULL, NULL);
+	fcntl(fd, F_SETFL, O_NONBLOCK);
     if (fd < 0)
         return;
     pollfd pfd = {};
@@ -117,7 +119,7 @@ void Server::readClient(Client *client) {
 	const RouteConfig *route = findRoute(req, config);
 	if (route == NULL) {
 		std::string err = Response::status("404", config->statusDir);
-		send(client->getFd(), err.c_str(), err.size(), 0);
+		client->appendSendData(err);
 		client->clearData();
 		return;
 	}
@@ -132,7 +134,7 @@ void Server::readClient(Client *client) {
 
 	if (i >= route->allowedMethods.size()) {
 		std::string err = Response::status("405", config->statusDir);
-		send(client->getFd(), err.c_str(), err.size(), 0);
+		client->appendSendData(err);
 		client->clearData();
 		return;
 	}
@@ -162,6 +164,70 @@ void Server::removeClient(Client *client) {
     }
 }
 
+// AI RECODE OF RUN FUNCTION. I DON'T REALLY UNDERSTAND THIS.
+
+void Server::run() {
+    while (true) {
+        if (fds.empty())
+            throw std::runtime_error("No sockets configured");
+
+        // Register POLLOUT for clients with pending data
+        for (size_t i = 0; i < fds.size(); i++) {
+            if (isListenSocket(fds[i].fd))
+                continue;
+            Client *client = NULL;
+            for (size_t j = 0; j < clients.size(); j++)
+                if (clients[j]->getFd() == fds[i].fd)
+                    client = clients[j];
+            if (client && client->hasPendingData())
+                fds[i].events = POLLIN | POLLOUT;
+            else
+                fds[i].events = POLLIN;
+        }
+
+        int ret = poll(&fds[0], fds.size(), -1);
+        if (ret < 0) {
+            if (errno == EINTR)
+                continue;
+            throw std::runtime_error("poll() failed");
+        }
+
+        std::vector<pollfd> ready(fds.begin(), fds.end());
+        for (size_t i = 0; i < ready.size(); i++) {
+            int fd = ready[i].fd;
+
+            if (ready[i].revents & POLLIN) {
+                if (isListenSocket(fd)) {
+                    acceptClient(fd);
+                } else {
+                    Client *client = NULL;
+                    for (size_t j = 0; j < clients.size(); j++)
+                        if (clients[j]->getFd() == fd)
+                            client = clients[j];
+                    if (client)
+                        readClient(client);
+                }
+            }
+
+            if (ready[i].revents & POLLOUT) {
+                Client *client = NULL;
+                for (size_t j = 0; j < clients.size(); j++)
+                    if (clients[j]->getFd() == fd)
+                        client = clients[j];
+                if (client && client->hasPendingData()) {
+                    const std::string &buf = client->getSendBuffer();
+                    int n = send(fd, buf.c_str(), buf.size(), 0);
+                    if (n > 0)
+                        client->drainSendBuffer(n);
+                    else if (n < 0)
+                        removeClient(client);
+                }
+            }
+        }
+    }
+}
+
+/*
 void Server::run() {
     while (true) {
         if (fds.empty())
@@ -192,3 +258,4 @@ void Server::run() {
         }
     }
 }
+*/

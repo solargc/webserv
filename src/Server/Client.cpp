@@ -26,3 +26,19 @@ void Client::appendData(const char *buf, int bytesRead) {
 const std::string &Client::getBuffer() const {
     return buffer;
 }
+
+void Client::appendSendData(const std::string &data) {
+	sendBuffer += data;
+}
+
+bool Client::hasPendingData() const {
+	return !sendBuffer.empty();
+}
+
+const std::string &Client::getSendBuffer() const {
+	return sendBuffer;
+}
+
+void Client::drainSendBuffer(size_t bytes) {
+	sendBuffer.erase(0, bytes);
+}

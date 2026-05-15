@@ -19,10 +19,7 @@ class Response {
 	static std::string defaultStatus(std::string code);
 	static std::string status200(std::ifstream &file);
 	static std::string status200(std::string file);
-	static std::string status201();
-	static std::string status204();
-	static std::string status404();
-	static std::string status405();
+	static std::string formResponse(std::string);
 
     const std::string &getRaw() const;
   private:
