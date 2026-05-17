@@ -42,17 +42,35 @@ bool Server::isListenSocket(int fd) const {
     return listenFdToConfig.find(fd) != listenFdToConfig.end();
 }
 
+static Client *findClient(std::vector<Client *> &clients, int fd) {
+    for (size_t i = 0; i < clients.size(); i++) {
+        if (clients[i]->getFd() == fd)
+            return clients[i];
+    }
+    return NULL;
+}
+
 void Server::acceptClient(int listenFd) {
-    int fd = accept(listenFd, NULL, NULL);
-	fcntl(fd, F_SETFL, O_NONBLOCK);
-    if (fd < 0)
-        return;
-    pollfd pfd = {};
-    pfd.fd = fd;
-    pfd.events = POLLIN;
-    fds.push_back(pfd);
-	const ServerConfig* config = listenFdToConfig[listenFd];
-	clients.push_back(new Client(fd, config));
+    while (true) {
+        int fd = accept(listenFd, NULL, NULL);
+        if (fd < 0) {
+            if (errno == EINTR)
+                continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                return;
+            return;
+        }
+        if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
+            close(fd);
+            continue;
+        }
+        pollfd pfd = {};
+        pfd.fd = fd;
+        pfd.events = POLLIN;
+        fds.push_back(pfd);
+        const ServerConfig* config = listenFdToConfig[listenFd];
+        clients.push_back(new Client(fd, config));
+    }
 }
 
 bool Server::isRequestComplete(const std::string &buf) const {
@@ -94,12 +112,19 @@ const RouteConfig *Server::findRoute(const Request& req, const ServerConfig* con
 
 void Server::readClient(Client *client) {
 	char buffer[4096];
-	int n = recv(client->getFd(), buffer, sizeof(buffer), 0);
-	if (n <= 0) {
+	ssize_t n = recv(client->getFd(), buffer, sizeof(buffer), 0);
+	if (n > 0)
+		client->appendData(buffer, n);
+	else if (n == 0) {
 		removeClient(client);
 		return;
 	}
-	client->appendData(buffer, n);
+	else {
+		if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
+			return;
+		removeClient(client);
+		return;
+	}
 
 	const std::string &buf = client->getBuffer();
 	if (buf.find("\r\n\r\n") == std::string::npos)
@@ -175,10 +200,7 @@ void Server::run() {
         for (size_t i = 0; i < fds.size(); i++) {
             if (isListenSocket(fds[i].fd))
                 continue;
-            Client *client = NULL;
-            for (size_t j = 0; j < clients.size(); j++)
-                if (clients[j]->getFd() == fds[i].fd)
-                    client = clients[j];
+            Client *client = findClient(clients, fds[i].fd);
             if (client && client->hasPendingData())
                 fds[i].events = POLLIN | POLLOUT;
             else
@@ -196,30 +218,33 @@ void Server::run() {
         for (size_t i = 0; i < ready.size(); i++) {
             int fd = ready[i].fd;
 
+            if (ready[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                if (!isListenSocket(fd)) {
+                    Client *client = findClient(clients, fd);
+                    if (client)
+                        removeClient(client);
+                }
+                continue;
+            }
+
             if (ready[i].revents & POLLIN) {
                 if (isListenSocket(fd)) {
                     acceptClient(fd);
                 } else {
-                    Client *client = NULL;
-                    for (size_t j = 0; j < clients.size(); j++)
-                        if (clients[j]->getFd() == fd)
-                            client = clients[j];
+                    Client *client = findClient(clients, fd);
                     if (client)
                         readClient(client);
                 }
             }
 
             if (ready[i].revents & POLLOUT) {
-                Client *client = NULL;
-                for (size_t j = 0; j < clients.size(); j++)
-                    if (clients[j]->getFd() == fd)
-                        client = clients[j];
+                Client *client = findClient(clients, fd);
                 if (client && client->hasPendingData()) {
                     const std::string &buf = client->getSendBuffer();
-                    int n = send(fd, buf.c_str(), buf.size(), 0);
+                    ssize_t n = send(fd, buf.c_str(), buf.size(), 0);
                     if (n > 0)
                         client->drainSendBuffer(n);
-                    else if (n < 0)
+                    else if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
                         removeClient(client);
                 }
             }
