@@ -122,8 +122,6 @@ void Server::readClient(Client *client) {
         removeClient(client);
         return;
     } else {
-        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
-            return;
         removeClient(client);
         return;
     }
@@ -246,8 +244,7 @@ void Server::run() {
                     ssize_t n = send(fd, buf.c_str(), buf.size(), 0);
                     if (n > 0)
                         client->drainSendBuffer(n);
-                    else if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK &&
-                             errno != EINTR)
+                    else
                         removeClient(client);
                 }
             }
