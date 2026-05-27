@@ -135,6 +135,9 @@ void Server::readClient(Client *client) {
 
     Request req;
     if (!req.parse(buf)) {
+        const ServerConfig *config = client->getServerConfig();
+        std::string err = Response::status("400", config->statusDir);
+        client->appendSendData(err);
         client->clearData();
         std::cout << "Bad request" << std::endl;
         return;

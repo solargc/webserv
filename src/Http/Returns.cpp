@@ -50,7 +50,9 @@ std::string Response::formResponse(std::string type) {
 }
 
 std::string Response::defaultStatus(std::string code) {
-	if (code == "404")
+	if (code == "400")
+		return formResponse("400 Bad Request");
+	else if (code == "404")
 		return formResponse("404 Not Found");
 	else if (code == "405")
 		return formResponse("405 Method not allowed");
