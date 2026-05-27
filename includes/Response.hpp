@@ -20,6 +20,8 @@ class Response {
 	static std::string status200(std::ifstream &file);
 	static std::string status200(std::string file);
 	static std::string formResponse(std::string);
+	static std::string statusWithBody(std::string code, std::string body);
+	static std::string statusText(std::string code);
 
     const std::string &getRaw() const;
   private:

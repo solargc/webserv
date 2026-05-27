@@ -3,31 +3,11 @@
 std::string Response::status200(std::ifstream& file) {
 	std::stringstream ss;
 	ss << file.rdbuf();
-	std::string fileContent = ss.str();
-	ss.str("");
-	ss.clear();
-	ss << fileContent.size();
-	std::string fileSize = ss.str();
-
-	std::string status = "HTTP/1.1 200 OK\r\n";
-	status += "Content-Type: text/html\r\n";
-	status += "Content-Length: " + fileSize + "\r\n";
-	status += "\r\n";
-	status += fileContent;
-	return status;
+	return statusWithBody("200", ss.str());
 }
 
 std::string Response::status200(std::string file) {
-	std::string status = "HTTP/1.1 200 OK\r\n";
-	status += "Content-Type: text/html\r\n";
-	status += "Content-Length: ";
-	std::ostringstream oss;
-	oss << file.size();
-	status += oss.str();
-	status += "\r\n";
-	status += "\r\n";
-	status += file;
-	return status;
+	return statusWithBody("200", file);
 }
 
 std::string Response::formResponse(std::string type) {
@@ -37,15 +17,41 @@ std::string Response::formResponse(std::string type) {
 		"\t</body>\n"
 		"</html>";
 
-	size_t htmlSize = html.size();
-	std::stringstream ss;
-	ss << htmlSize;
+	return statusWithBody(type.substr(0, 3), html);
+}
 
+std::string Response::statusText(std::string code) {
+	if (code == "200")
+		return "OK";
+	else if (code == "201")
+		return "Created";
+	else if (code == "204")
+		return "No Content";
+	else if (code == "400")
+		return "Bad Request";
+	else if (code == "404")
+		return "Not Found";
+	else if (code == "405")
+		return "Method not allowed";
+	else if (code == "500")
+		return "Internal Server Error";
+	return "No Content";
+}
+
+std::string Response::statusWithBody(std::string code, std::string body) {
+	std::string type = code + " " + statusText(code);
+	if (code == "204") {
+		return "HTTP/1.1 " + type + "\r\n"
+			"Content-Length: 0\r\n"
+			"\r\n";
+	}
+
+	std::stringstream ss;
+	ss << body.size();
 	std::string status = "HTTP/1.1 " + type + "\r\n"
 		"Content-Type: text/html\r\n"
 		"Content-Length: " + ss.str() + "\r\n"
-		"\r\n" + html;
-
+		"\r\n" + body;
 	return status;
 }
 
@@ -63,6 +69,8 @@ std::string Response::defaultStatus(std::string code) {
 }
 
 std::string Response::status(std::string code, std::string statusDir, std::ifstream& file200) {
+	if (code == "200")
+		return status200(file200);
 	std::string status = statusDir + "/" + code + ".html";
 	std::ifstream file(status.c_str());
 	if (!file.good())
@@ -70,7 +78,7 @@ std::string Response::status(std::string code, std::string statusDir, std::ifstr
 
 	std::stringstream ss;
 	ss << file.rdbuf();
-	return ss.str();
+	return statusWithBody(code, ss.str());
 }
 
 std::string Response::status(std::string code, std::string statusDir) {
@@ -81,10 +89,12 @@ std::string Response::status(std::string code, std::string statusDir) {
 
 	std::stringstream ss;
 	ss << file.rdbuf();
-	return ss.str();
+	return statusWithBody(code, ss.str());
 }
 
 std::string Response::status(std::string code, std::string statusDir, std::string file200) {
+	if (code == "200")
+		return status200(file200);
 	std::string status = statusDir + "/" + code + ".html";
 	std::ifstream file(status.c_str());
 	if (!file.good())
@@ -92,5 +102,5 @@ std::string Response::status(std::string code, std::string statusDir, std::strin
 
 	std::stringstream ss;
 	ss << file.rdbuf();
-	return ss.str();
+	return statusWithBody(code, ss.str());
 }
