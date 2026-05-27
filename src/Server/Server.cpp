@@ -104,13 +104,30 @@ bool Server::isRequestComplete(const std::string &buf) const {
     return (buf.size() - bodyPos == static_cast<size_t>(conLen));
 }
 
+static bool routeMatchesPath(const std::string &routePath,
+                             const std::string &requestPath) {
+    if (routePath == "/")
+        return true;
+    if (requestPath == routePath)
+        return true;
+    if (requestPath.size() <= routePath.size())
+        return false;
+    if (requestPath.find(routePath) != 0)
+        return false;
+    return requestPath[routePath.size()] == '/';
+}
+
 const RouteConfig *Server::findRoute(const Request &req,
                                      const ServerConfig *config) {
+    const RouteConfig *best = NULL;
+
     for (size_t i = 0; i < config->routes.size(); i++) {
-        if (req.path.find(config->routes[i].path) == 0)
-            return &config->routes[i];
+        if (!routeMatchesPath(config->routes[i].path, req.path))
+            continue;
+        if (best == NULL || config->routes[i].path.size() > best->path.size())
+            best = &config->routes[i];
     }
-    return NULL;
+    return best;
 }
 
 void Server::readClient(Client *client) {
