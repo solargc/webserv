@@ -110,6 +110,11 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 
 void Server::StaticPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
 	std::cout << "static post entered" << std::endl;
+	if (route->uploadPath.empty()) {
+		std::string err = Response::status("403", *config);
+		client->appendSendData(err);
+		return;
+	}
 	int i = 1;
 	std::stringstream newFile;
 	newFile << route->uploadPath << "/post" << i; 
