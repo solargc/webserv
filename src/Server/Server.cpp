@@ -186,6 +186,14 @@ void Server::readClient(Client *client) {
         return;
     }
 
+    if (route->hasRedirect) {
+        std::string res = Response::redirect(route->redirectCode,
+                                             route->redirectTarget);
+        client->appendSendData(res);
+        client->clearData();
+        return;
+    }
+
     size_t i = 0;
     for (; i < route->allowedMethods.size(); i++) {
         if (route->allowedMethods[i] == req.method) {

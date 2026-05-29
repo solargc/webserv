@@ -24,6 +24,7 @@ class Response {
 	static std::string formResponse(std::string);
 	static std::string statusWithBody(std::string code, std::string body);
 	static std::string statusText(std::string code);
+	static std::string redirect(int code, const std::string &target);
 
     const std::string &getRaw() const;
   private:

@@ -28,6 +28,16 @@ std::string Response::statusText(std::string code) {
 		return "Created";
 	else if (code == "204")
 		return "No Content";
+	else if (code == "301")
+		return "Moved Permanently";
+	else if (code == "302")
+		return "Found";
+	else if (code == "303")
+		return "See Other";
+	else if (code == "307")
+		return "Temporary Redirect";
+	else if (code == "308")
+		return "Permanent Redirect";
 	else if (code == "400")
 		return "Bad Request";
 	else if (code == "404")
@@ -56,6 +66,18 @@ std::string Response::statusWithBody(std::string code, std::string body) {
 		"Content-Length: " + ss.str() + "\r\n"
 		"\r\n" + body;
 	return status;
+}
+
+std::string Response::redirect(int code, const std::string &target) {
+	std::stringstream ss;
+	ss << code;
+	std::string codeString = ss.str();
+	std::string type = codeString + " " + statusText(codeString);
+
+	return "HTTP/1.1 " + type + "\r\n"
+		"Location: " + target + "\r\n"
+		"Content-Length: 0\r\n"
+		"\r\n";
 }
 
 std::string Response::defaultStatus(std::string code) {
