@@ -52,6 +52,28 @@ static Client *findClient(std::vector<Client *> &clients, int fd) {
     return NULL;
 }
 
+static bool parseContentLength(const std::string &buf, unsigned long &length) {
+    size_t pos = buf.find("Content-Length:");
+    if (pos == std::string::npos)
+        return false;
+    pos += 15;
+    if (pos >= buf.size())
+        return false;
+    while (pos < buf.size() && buf[pos] == ' ')
+        pos++;
+
+    size_t end = 0;
+    while (pos + end < buf.size() && std::isdigit(buf[pos + end]))
+        end++;
+    if (end == 0)
+        return false;
+
+    std::string lenStr = buf.substr(pos, end);
+    char *endptr;
+    length = std::strtoul(lenStr.c_str(), &endptr, 10);
+    return *endptr == '\0';
+}
+
 void Server::acceptClient(int listenFd) {
     while (true) {
         int fd = accept(listenFd, NULL, NULL);
@@ -76,32 +98,25 @@ void Server::acceptClient(int listenFd) {
 }
 
 bool Server::isRequestComplete(const std::string &buf) const {
-    size_t pos = buf.find("Content-Length:");
-    if (pos == std::string::npos)
+    unsigned long conLen = 0;
+    if (!parseContentLength(buf, conLen))
         return true;
-    pos += 15; // Length of 'Content-Length:'
-    if (pos >= buf.size())
-        return false;
-    if (buf[pos] == ' ')
-        ++pos; // If there is a space after 'Content-Length'
-
-    size_t end = 0;
-    while (pos + end < buf.size() && std::isdigit(buf[pos + end])) {
-        ++end;
-    }
-    if (end == 0)
-        return false;
 
     size_t bodyPos = buf.find("\r\n\r\n");
     if (bodyPos == std::string::npos)
         return false;
     bodyPos += 4;
-    std::string lenStr = buf.substr(pos, end);
-    char *endptr;
-    unsigned long conLen = std::strtoul(lenStr.c_str(), &endptr, 10);
-    if (*endptr != '\0')
-        return false;
     return (buf.size() - bodyPos == static_cast<size_t>(conLen));
+}
+
+static bool contentLengthExceedsLimit(const std::string &buf, size_t limit) {
+    if (limit == 0)
+        return false;
+
+    unsigned long conLen = 0;
+    if (!parseContentLength(buf, conLen))
+        return false;
+    return conLen > static_cast<unsigned long>(limit);
 }
 
 static bool bodyExceedsLimit(const std::string &buf, size_t limit) {
@@ -159,7 +174,8 @@ void Server::readClient(Client *client) {
         return;
 
     const ServerConfig *config = client->getServerConfig();
-    if (bodyExceedsLimit(buf, config->clientMaxBodySize)) {
+    if (contentLengthExceedsLimit(buf, config->clientMaxBodySize) ||
+        bodyExceedsLimit(buf, config->clientMaxBodySize)) {
         std::string err = Response::status("413", *config);
         client->appendSendData(err);
         client->clearData();
