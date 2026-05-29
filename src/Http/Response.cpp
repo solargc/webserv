@@ -1,4 +1,12 @@
 #include "Response.hpp"
+#include <sys/stat.h>
+
+static bool isDirectory(const std::string &path) {
+	struct stat info;
+	if (stat(path.c_str(), &info) != 0)
+		return false;
+	return (info.st_mode & S_IFDIR) != 0;
+}
 
 Response::Response(const Request& req, const RouteConfig& route, std::string statusDir) {	
 	compose(req, route, statusDir);
@@ -26,8 +34,11 @@ std::string Response::resolvePath(const Request& req, const RouteConfig& route) 
 
 void Response::compose(const Request& req, const RouteConfig& route, std::string statusDir) {
 	std::string filePath = resolvePath(req, route);
-	if (!filePath.empty() && filePath[filePath.size() - 1] == '/')
+	if (isDirectory(filePath) && !route.indexFile.empty()) {
+		if (filePath[filePath.size() - 1] != '/')
+			filePath += "/";
 		filePath += route.indexFile;
+	}
 	std::ifstream file(filePath.c_str());
 	if (!file.is_open()) {
 		raw = status("404", statusDir);
@@ -38,8 +49,25 @@ void Response::compose(const Request& req, const RouteConfig& route, std::string
 
 void Response::compose(const Request& req, const RouteConfig& route, const ServerConfig& config) {
 	std::string filePath = resolvePath(req, route);
-	if (!filePath.empty() && filePath[filePath.size() - 1] == '/')
-		filePath += route.indexFile;
+	if (isDirectory(filePath)) {
+		if (!route.indexFile.empty()) {
+			std::string indexPath = filePath;
+			if (indexPath[indexPath.size() - 1] != '/')
+				indexPath += "/";
+			indexPath += route.indexFile;
+			std::ifstream indexFile(indexPath.c_str());
+			if (indexFile.is_open()) {
+				raw = status("200", config.statusDir, indexFile);
+				return;
+			}
+		}
+		if (route.autoindex) {
+			raw = autoindex(req.path, filePath);
+			return;
+		}
+		raw = status("403", config);
+		return;
+	}
 	std::ifstream file(filePath.c_str());
 	if (!file.is_open()) {
 		raw = status("404", config);

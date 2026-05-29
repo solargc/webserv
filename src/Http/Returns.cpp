@@ -1,5 +1,6 @@
 #include "Response.hpp"
 #include <cstdlib>
+#include <dirent.h>
 
 std::string Response::status200(std::ifstream& file) {
 	std::stringstream ss;
@@ -40,6 +41,8 @@ std::string Response::statusText(std::string code) {
 		return "Permanent Redirect";
 	else if (code == "400")
 		return "Bad Request";
+	else if (code == "403")
+		return "Forbidden";
 	else if (code == "404")
 		return "Not Found";
 	else if (code == "405")
@@ -80,9 +83,44 @@ std::string Response::redirect(int code, const std::string &target) {
 		"\r\n";
 }
 
+std::string Response::autoindex(const std::string &requestPath,
+								const std::string &directoryPath) {
+	DIR *dir = opendir(directoryPath.c_str());
+	if (dir == NULL)
+		return defaultStatus("404");
+
+	std::string basePath = requestPath;
+	if (basePath.empty())
+		basePath = "/";
+	if (basePath[basePath.size() - 1] != '/')
+		basePath += "/";
+
+	std::string html = "<html>\n"
+		"\t<body>\n"
+		"\t\t<h1>Index of " + requestPath + "</h1>\n"
+		"\t\t<ul>\n";
+
+	struct dirent *entry;
+	while ((entry = readdir(dir)) != NULL) {
+		std::string name = entry->d_name;
+		if (name == ".")
+			continue;
+		html += "\t\t\t<li><a href=\"" + basePath + name + "\">" +
+			name + "</a></li>\n";
+	}
+	closedir(dir);
+
+	html += "\t\t</ul>\n"
+		"\t</body>\n"
+		"</html>";
+	return statusWithBody("200", html);
+}
+
 std::string Response::defaultStatus(std::string code) {
 	if (code == "400")
 		return formResponse("400 Bad Request");
+	else if (code == "403")
+		return formResponse("403 Forbidden");
 	else if (code == "404")
 		return formResponse("404 Not Found");
 	else if (code == "405")

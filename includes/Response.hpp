@@ -26,6 +26,8 @@ class Response {
 	static std::string statusText(std::string code);
 	static std::string redirect(int code, const std::string &target);
 	static std::string resolvePath(const Request &req, const RouteConfig &route);
+	static std::string autoindex(const std::string &requestPath,
+								 const std::string &directoryPath);
 
     const std::string &getRaw() const;
   private:
