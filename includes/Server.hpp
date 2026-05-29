@@ -40,6 +40,7 @@ class Server {
     void readClient(Client *client);
     void handleCgiStdin(Client *client, int fd);
     void handleCgiStdout(Client *client, int fd);
+    void drainCgiStdout(Client *client, int fd);
     void checkCgiComplete(Client *client);
     void finishCgi(Client *client);
     void removeClient(Client *client);

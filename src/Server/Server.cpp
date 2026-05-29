@@ -480,6 +480,22 @@ void Server::handleCgiStdout(Client *client, int fd) {
     client->markCgiStdoutClosed();
 }
 
+void Server::drainCgiStdout(Client *client, int fd) {
+    char buffer[4096];
+
+    while (true) {
+        ssize_t n = read(fd, buffer, sizeof(buffer));
+        if (n > 0) {
+            client->appendCgiOutput(buffer, n);
+            continue;
+        }
+        close(fd);
+        removePollFd(fd);
+        client->markCgiStdoutClosed();
+        return;
+    }
+}
+
 void Server::checkCgiComplete(Client *client) {
     if (!client->hasCgi())
         return;
@@ -556,24 +572,23 @@ void Server::run() {
                          entry.type == POLL_CGI_STDOUT;
 
             if (isCgi && entry.client && hasClient(clients, entry.client)) {
-                if ((entry.pfd.revents & POLLOUT) &&
-                    entry.type == POLL_CGI_STDIN)
-                    handleCgiStdin(entry.client, fd);
-                if ((entry.pfd.revents & POLLIN) &&
-                    entry.type == POLL_CGI_STDOUT)
-                    handleCgiStdout(entry.client, fd);
-                if (entry.pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
-                    if (entry.type == POLL_CGI_STDIN &&
+                if (entry.type == POLL_CGI_STDIN) {
+                    if ((entry.pfd.revents & POLLOUT) &&
+                        !entry.client->isCgiStdinClosed())
+                        handleCgiStdin(entry.client, fd);
+                    if ((entry.pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) &&
                         !entry.client->isCgiStdinClosed()) {
                         close(fd);
                         removePollFd(fd);
                         entry.client->markCgiStdinClosed();
-                    } else if (entry.type == POLL_CGI_STDOUT &&
-                               !entry.client->isCgiStdoutClosed()) {
-                        close(fd);
-                        removePollFd(fd);
-                        entry.client->markCgiStdoutClosed();
                     }
+                } else if (entry.type == POLL_CGI_STDOUT) {
+                    if ((entry.pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) &&
+                        !entry.client->isCgiStdoutClosed())
+                        drainCgiStdout(entry.client, fd);
+                    else if ((entry.pfd.revents & POLLIN) &&
+                             !entry.client->isCgiStdoutClosed())
+                        handleCgiStdout(entry.client, fd);
                 }
                 checkCgiComplete(entry.client);
                 continue;
