@@ -1,8 +1,11 @@
 #include "Config.hpp"
 #include "Server.hpp"
 #include <iostream>
+#include <csignal>
 
 int main(int argc, char **argv) {
+    signal(SIGPIPE, SIG_IGN);
+
     if (argc != 2) {
         std::cerr << "Usage: ./webserv <config_file>" << std::endl;
         return 1;
