@@ -187,13 +187,6 @@ ServerConfig Config::parseServer(const std::vector<std::string> &tokens,
             if (i >= tokens.size() || tokens[i] != ";")
                 throw std::runtime_error("Expected ';' after host value");
             i++;
-        } else if (tokens[i] == "server_name") {
-            i++;
-            while (i < tokens.size() && tokens[i] != ";")
-                server.serverNames.push_back(tokens[i++]);
-            if (i >= tokens.size())
-                throw std::runtime_error("Expected ';' after server_name");
-            i++;
         } else if (tokens[i] == "client_max_body_size") {
             i++;
             if (i >= tokens.size())

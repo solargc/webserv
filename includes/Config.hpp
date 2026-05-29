@@ -21,7 +21,6 @@ struct RouteConfig {
 
 struct ServerConfig {
     std::string host;
-    std::vector<std::string> serverNames;
     int port;
 	std::string statusDir;
     std::map<int, std::string> errorPages;
