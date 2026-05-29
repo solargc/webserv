@@ -6,10 +6,13 @@
 #include <sys/socket.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cctype>
 #include <fcntl.h>
+#include <sstream>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <vector>
 
 static bool isSafePath(const std::string &path) {
     size_t i = 0;
@@ -33,6 +36,90 @@ static std::string pathWithoutQuery(const std::string &path) {
 	if (query == std::string::npos)
 		return path;
 	return path.substr(0, query);
+}
+
+static std::string queryString(const std::string &path) {
+	size_t query = path.find('?');
+	if (query == std::string::npos)
+		return "";
+	return path.substr(query + 1);
+}
+
+static std::string headerValue(const Request &req, const std::string &name) {
+	for (std::map<std::string, std::string>::const_iterator it =
+			 req.headers.begin(); it != req.headers.end(); ++it) {
+		if (it->first.size() != name.size())
+			continue;
+		bool match = true;
+		for (size_t i = 0; i < name.size(); i++) {
+			if (std::tolower(static_cast<unsigned char>(it->first[i])) !=
+				std::tolower(static_cast<unsigned char>(name[i]))) {
+				match = false;
+				break;
+			}
+		}
+		if (match)
+			return it->second;
+	}
+	return "";
+}
+
+static std::string numberToString(size_t value) {
+	std::ostringstream ss;
+	ss << value;
+	return ss.str();
+}
+
+static std::string intToString(int value) {
+	std::ostringstream ss;
+	ss << value;
+	return ss.str();
+}
+
+static std::string headerToEnvName(const std::string &header) {
+	std::string env = "HTTP_";
+	for (size_t i = 0; i < header.size(); i++) {
+		if (header[i] == '-')
+			env += '_';
+		else
+			env += std::toupper(static_cast<unsigned char>(header[i]));
+	}
+	return env;
+}
+
+static std::vector<std::string> buildCgiEnv(const Request &req,
+											const RouteConfig *route,
+											const ServerConfig *config,
+											const std::string &scriptPath) {
+	std::vector<std::string> env;
+	std::string contentLength = headerValue(req, "Content-Length");
+	if (contentLength.empty() && !req.body.empty())
+		contentLength = numberToString(req.body.size());
+
+	env.push_back("GATEWAY_INTERFACE=CGI/1.1");
+	env.push_back("REQUEST_METHOD=" + req.method);
+	env.push_back("QUERY_STRING=" + queryString(req.path));
+	env.push_back("SCRIPT_FILENAME=" + scriptPath);
+	env.push_back("SCRIPT_NAME=" + pathWithoutQuery(req.path));
+	env.push_back("PATH_INFO=");
+	env.push_back("SERVER_PROTOCOL=" + req.version);
+	env.push_back("SERVER_SOFTWARE=webserv");
+	env.push_back("SERVER_NAME=" + config->host);
+	env.push_back("SERVER_PORT=" + intToString(config->port));
+	env.push_back("DOCUMENT_ROOT=" + route->documentRoot);
+	env.push_back("REQUEST_URI=" + req.path);
+	env.push_back("CONTENT_LENGTH=" + contentLength);
+	env.push_back("CONTENT_TYPE=" + headerValue(req, "Content-Type"));
+	env.push_back("REDIRECT_STATUS=200");
+
+	for (std::map<std::string, std::string>::const_iterator it =
+			 req.headers.begin(); it != req.headers.end(); ++it) {
+		if (headerToEnvName(it->first) == "HTTP_CONTENT_LENGTH" ||
+			headerToEnvName(it->first) == "HTTP_CONTENT_TYPE")
+			continue;
+		env.push_back(headerToEnvName(it->first) + "=" + it->second);
+	}
+	return env;
 }
 
 static bool findCgiInterpreter(const Request &req, const RouteConfig *route,
@@ -120,9 +207,13 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 		close(stdinPipe[0]);
 		close(stdoutPipe[1]);
 		std::string file = resolveScriptPath(req, route);
+		std::vector<std::string> env = buildCgiEnv(req, route, config, file);
+		std::vector<char *> envp;
+		for (size_t i = 0; i < env.size(); i++)
+			envp.push_back(const_cast<char *>(env[i].c_str()));
+		envp.push_back(NULL);
 		char *argv[] = {const_cast<char*>(interpreter.c_str()), const_cast<char*>(file.c_str()), NULL};
-		char *envp[] = {NULL};
-		execve(interpreter.c_str(), argv, envp);
+		execve(interpreter.c_str(), argv, &envp[0]);
 		std::exit(1);
 	}
 	else {
@@ -207,9 +298,13 @@ void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const
 		close(stdinPipe[0]);
 		close(stdoutPipe[1]);
 		std::string file = resolveScriptPath(req, route);
+		std::vector<std::string> env = buildCgiEnv(req, route, config, file);
+		std::vector<char *> envp;
+		for (size_t i = 0; i < env.size(); i++)
+			envp.push_back(const_cast<char *>(env[i].c_str()));
+		envp.push_back(NULL);
 		char *argv[] = {const_cast<char*>(interpreter.c_str()), const_cast<char*>(file.c_str()), NULL};
-		char *envp[] = {NULL};
-		execve(interpreter.c_str(), argv, envp);
+		execve(interpreter.c_str(), argv, &envp[0]);
 		std::exit(1);
 	}
 	else {
