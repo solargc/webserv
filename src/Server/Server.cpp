@@ -4,6 +4,7 @@
 #include "SocketSetup.hpp"
 
 #include <cerrno>
+#include <cctype>
 #include <cstdlib>
 #include <fcntl.h>
 #include <iostream>
@@ -52,13 +53,45 @@ static Client *findClient(std::vector<Client *> &clients, int fd) {
     return NULL;
 }
 
+static bool headerNameEquals(const std::string &actual,
+                             const std::string &expected) {
+    if (actual.size() != expected.size())
+        return false;
+    for (size_t i = 0; i < actual.size(); i++) {
+        if (std::tolower(static_cast<unsigned char>(actual[i])) !=
+            std::tolower(static_cast<unsigned char>(expected[i])))
+            return false;
+    }
+    return true;
+}
+
 static bool parseContentLength(const std::string &buf, unsigned long &length) {
-    size_t pos = buf.find("Content-Length:");
+    size_t pos = buf.find("\r\n");
     if (pos == std::string::npos)
         return false;
-    pos += 15;
-    if (pos >= buf.size())
+    pos += 2;
+
+    size_t valuePos = std::string::npos;
+    while (pos < buf.size()) {
+        size_t lineEnd = buf.find("\r\n", pos);
+        if (lineEnd == std::string::npos)
+            return false;
+        if (lineEnd == pos)
+            return false;
+
+        std::string line = buf.substr(pos, lineEnd - pos);
+        size_t colon = line.find(':');
+        if (colon != std::string::npos &&
+            headerNameEquals(line.substr(0, colon), "content-length")) {
+            valuePos = pos + colon + 1;
+            break;
+        }
+        pos = lineEnd + 2;
+    }
+
+    if (valuePos == std::string::npos)
         return false;
+    pos = valuePos;
     while (pos < buf.size() && buf[pos] == ' ')
         pos++;
 
