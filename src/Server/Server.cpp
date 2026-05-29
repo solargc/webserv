@@ -104,6 +104,17 @@ bool Server::isRequestComplete(const std::string &buf) const {
     return (buf.size() - bodyPos == static_cast<size_t>(conLen));
 }
 
+static bool bodyExceedsLimit(const std::string &buf, size_t limit) {
+    if (limit == 0)
+        return false;
+
+    size_t bodyPos = buf.find("\r\n\r\n");
+    if (bodyPos == std::string::npos)
+        return false;
+    bodyPos += 4;
+    return buf.size() - bodyPos > limit;
+}
+
 static bool routeMatchesPath(const std::string &routePath,
                              const std::string &requestPath) {
     if (routePath == "/")
@@ -147,23 +158,29 @@ void Server::readClient(Client *client) {
     if (buf.find("\r\n\r\n") == std::string::npos)
         return;
 
+    const ServerConfig *config = client->getServerConfig();
+    if (bodyExceedsLimit(buf, config->clientMaxBodySize)) {
+        std::string err = Response::status("413", *config);
+        client->appendSendData(err);
+        client->clearData();
+        return;
+    }
+
     if (!isRequestComplete(buf))
         return;
 
     Request req;
     if (!req.parse(buf)) {
-        const ServerConfig *config = client->getServerConfig();
-        std::string err = Response::status("400", config->statusDir);
+        std::string err = Response::status("400", *config);
         client->appendSendData(err);
         client->clearData();
         std::cout << "Bad request" << std::endl;
         return;
     }
 
-    const ServerConfig *config = client->getServerConfig();
     const RouteConfig *route = findRoute(req, config);
     if (route == NULL) {
-        std::string err = Response::status("404", config->statusDir);
+        std::string err = Response::status("404", *config);
         client->appendSendData(err);
         client->clearData();
         return;
@@ -178,7 +195,7 @@ void Server::readClient(Client *client) {
     }
 
     if (i >= route->allowedMethods.size()) {
-        std::string err = Response::status("405", config->statusDir);
+        std::string err = Response::status("405", *config);
         client->appendSendData(err);
         client->clearData();
         return;

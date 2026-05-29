@@ -10,9 +10,11 @@
 class Response {
   public:
     Response(const Request &req, const RouteConfig &route, std::string statusDir);
+    Response(const Request &req, const RouteConfig &route, const ServerConfig &config);
 
 	// Errors
 	static std::string status(std::string code, std::string statusDir);
+	static std::string status(std::string code, const ServerConfig &config);
 	static std::string status(std::string code, std::string statusDir, std::ifstream &file200);
 	static std::string status(std::string code, std::string statusDir, std::string file200);
 
@@ -27,4 +29,5 @@ class Response {
   private:
     std::string raw;
     void compose(const Request &req, const RouteConfig &route, std::string statusDir);
+    void compose(const Request &req, const RouteConfig &route, const ServerConfig &config);
 };

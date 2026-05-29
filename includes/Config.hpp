@@ -3,6 +3,8 @@
 
 #include <string>
 #include <vector>
+#include <map>
+#include <cstddef>
 
 struct RouteConfig {
     std::string path;
@@ -10,12 +12,20 @@ struct RouteConfig {
     std::string documentRoot;
     std::string indexFile;
 	std::string uploadPath;
+    bool autoindex;
+    bool hasRedirect;
+    int redirectCode;
+    std::string redirectTarget;
+    std::map<std::string, std::string> cgi;
 };
 
 struct ServerConfig {
     std::string host;
+    std::vector<std::string> serverNames;
     int port;
 	std::string statusDir;
+    std::map<int, std::string> errorPages;
+    size_t clientMaxBodySize;
     std::vector<RouteConfig> routes;
 };
 

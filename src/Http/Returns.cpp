@@ -1,4 +1,5 @@
 #include "Response.hpp"
+#include <cstdlib>
 
 std::string Response::status200(std::ifstream& file) {
 	std::stringstream ss;
@@ -33,6 +34,8 @@ std::string Response::statusText(std::string code) {
 		return "Not Found";
 	else if (code == "405")
 		return "Method not allowed";
+	else if (code == "413")
+		return "Payload Too Large";
 	else if (code == "500")
 		return "Internal Server Error";
 	return "No Content";
@@ -62,6 +65,8 @@ std::string Response::defaultStatus(std::string code) {
 		return formResponse("404 Not Found");
 	else if (code == "405")
 		return formResponse("405 Method not allowed");
+	else if (code == "413")
+		return formResponse("413 Payload Too Large");
 	else if (code == "201")
 		return formResponse("201 Created");
 	else
@@ -90,6 +95,20 @@ std::string Response::status(std::string code, std::string statusDir) {
 	std::stringstream ss;
 	ss << file.rdbuf();
 	return statusWithBody(code, ss.str());
+}
+
+std::string Response::status(std::string code, const ServerConfig &config) {
+	int statusCode = std::atoi(code.c_str());
+	std::map<int, std::string>::const_iterator it = config.errorPages.find(statusCode);
+	if (it != config.errorPages.end()) {
+		std::ifstream file(it->second.c_str());
+		if (file.good()) {
+			std::stringstream ss;
+			ss << file.rdbuf();
+			return statusWithBody(code, ss.str());
+		}
+	}
+	return status(code, config.statusDir);
 }
 
 std::string Response::status(std::string code, std::string statusDir, std::string file200) {
