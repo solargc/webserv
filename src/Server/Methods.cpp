@@ -28,6 +28,34 @@ static bool isSafePath(const std::string &path) {
     return true;
 }
 
+static std::string pathWithoutQuery(const std::string &path) {
+	size_t query = path.find('?');
+	if (query == std::string::npos)
+		return path;
+	return path.substr(0, query);
+}
+
+static bool findCgiInterpreter(const Request &req, const RouteConfig *route,
+							   std::string &interpreter) {
+	std::string path = pathWithoutQuery(req.path);
+	for (std::map<std::string, std::string>::const_iterator it =
+			 route->cgi.begin(); it != route->cgi.end(); ++it) {
+		const std::string &extension = it->first;
+		if (path.size() >= extension.size() &&
+			path.compare(path.size() - extension.size(), extension.size(),
+						 extension) == 0) {
+			interpreter = it->second;
+			return true;
+		}
+	}
+	return false;
+}
+
+static std::string resolveScriptPath(Request req, const RouteConfig *route) {
+	req.path = pathWithoutQuery(req.path);
+	return Response::resolvePath(req, *route);
+}
+
 bool Server::directoryExists(const char* path) {
     struct stat info;
 
@@ -61,13 +89,14 @@ void Server::handleMethods(Request req, Client *client, const RouteConfig *route
 }
 
 void Server::handlePost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
-	if (req.path.size() < 3 || req.path.substr(req.path.size() - 3) != ".py")
-		StaticPost(req, client, route, config);
+	std::string interpreter;
+	if (findCgiInterpreter(req, route, interpreter))
+		CGIPost(req, client, route, config, interpreter);
 	else
-		CGIPost(req, client, route, config);
+		StaticPost(req, client, route, config);
 }
 
-void Server::CGIPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
+void Server::CGIPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config, const std::string &interpreter) {
 	int stdinPipe[2];
 	int stdoutPipe[2];
 	if (pipe(stdinPipe) < 0) {
@@ -90,10 +119,10 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 		dup2(stdoutPipe[1], STDOUT_FILENO);
 		close(stdinPipe[0]);
 		close(stdoutPipe[1]);
-		std::string file = Response::resolvePath(req, *route);
-		char *argv[] = {(char*)"/usr/bin/python3", const_cast<char*>(file.c_str()), NULL};
+		std::string file = resolveScriptPath(req, route);
+		char *argv[] = {const_cast<char*>(interpreter.c_str()), const_cast<char*>(file.c_str()), NULL};
 		char *envp[] = {NULL};
-		execve("/usr/bin/python3", argv, envp);
+		execve(interpreter.c_str(), argv, envp);
 		std::exit(1);
 	}
 	else {
@@ -147,13 +176,14 @@ void Server::StaticPost(Request req, Client *client, const RouteConfig *route, c
 }
 
 void Server::handleGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
-	if (req.path.size() < 3 || req.path.substr(req.path.size() - 3) != ".py")
-		StaticGet(req, client, route, config);
+	std::string interpreter;
+	if (findCgiInterpreter(req, route, interpreter))
+		CGIGet(req, client, route, config, interpreter);
 	else
-		CGIGet(req, client, route, config);
+		StaticGet(req, client, route, config);
 }
 
-void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
+void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config, const std::string &interpreter) {
 	int stdinPipe[2];
 	int stdoutPipe[2];
 	if (pipe(stdinPipe) < 0) {
@@ -176,10 +206,10 @@ void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const
 		dup2(stdoutPipe[1], STDOUT_FILENO);
 		close(stdinPipe[0]);
 		close(stdoutPipe[1]);
-		std::string file = Response::resolvePath(req, *route);
-		char *argv[] = {(char*)"/usr/bin/python3", const_cast<char*>(file.c_str()), NULL};
+		std::string file = resolveScriptPath(req, route);
+		char *argv[] = {const_cast<char*>(interpreter.c_str()), const_cast<char*>(file.c_str()), NULL};
 		char *envp[] = {NULL};
-		execve("/usr/bin/python3", argv, envp);
+		execve(interpreter.c_str(), argv, envp);
 		std::exit(1);
 	}
 	else {
