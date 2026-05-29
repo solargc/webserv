@@ -10,6 +10,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 Server::Server(const std::vector<ServerConfig> &configs) : _configs(configs) {
@@ -49,6 +50,28 @@ void Server::registerClientFd(Client *client) {
     entry.client = client;
     entry.config = NULL;
     pollEntries.push_back(entry);
+}
+
+void Server::registerCgiFd(int fd, Client *client, PollEntryType type) {
+    PollEntry entry = {};
+    entry.pfd.fd = fd;
+    if (type == POLL_CGI_STDIN)
+        entry.pfd.events = POLLOUT;
+    else
+        entry.pfd.events = POLLIN;
+    entry.type = type;
+    entry.client = client;
+    entry.config = NULL;
+    pollEntries.push_back(entry);
+}
+
+void Server::removePollFd(int fd) {
+    for (size_t i = 0; i < pollEntries.size();) {
+        if (pollEntries[i].pfd.fd == fd)
+            pollEntries.erase(pollEntries.begin() + i);
+        else
+            i++;
+    }
 }
 
 static bool hasClient(const std::vector<Client *> &clients, Client *client) {
@@ -281,12 +304,75 @@ void Server::removeClient(Client *client) {
         }
     }
     for (size_t i = 0; i < pollEntries.size();) {
-        if (pollEntries[i].type == POLL_CLIENT && pollEntries[i].pfd.fd == fd) {
+        if (pollEntries[i].pfd.fd == fd ||
+            ((pollEntries[i].type == POLL_CGI_STDIN ||
+              pollEntries[i].type == POLL_CGI_STDOUT) &&
+             pollEntries[i].client == client)) {
             pollEntries.erase(pollEntries.begin() + i);
         } else {
             i++;
         }
     }
+}
+
+void Server::handleCgiStdin(Client *client, int fd) {
+    const std::string &input = client->getCgiInput();
+    size_t sent = client->getCgiInputSent();
+    if (sent >= input.size()) {
+        close(fd);
+        removePollFd(fd);
+        client->markCgiStdinClosed();
+        return;
+    }
+
+    ssize_t n = write(fd, input.c_str() + sent, input.size() - sent);
+    if (n > 0)
+        client->addCgiInputSent(n);
+    else {
+        close(fd);
+        removePollFd(fd);
+        client->markCgiStdinClosed();
+        return;
+    }
+
+    if (client->getCgiInputSent() >= input.size()) {
+        close(fd);
+        removePollFd(fd);
+        client->markCgiStdinClosed();
+    }
+}
+
+void Server::handleCgiStdout(Client *client, int fd) {
+    char buffer[4096];
+    ssize_t n = read(fd, buffer, sizeof(buffer));
+    if (n > 0) {
+        client->appendCgiOutput(buffer, n);
+        return;
+    }
+    close(fd);
+    removePollFd(fd);
+    client->markCgiStdoutClosed();
+}
+
+void Server::checkCgiComplete(Client *client) {
+    if (!client->hasCgi())
+        return;
+    if (!client->isCgiExited()) {
+        int status = 0;
+        pid_t result = waitpid(client->getCgiPid(), &status, WNOHANG);
+        if (result != 0)
+            client->markCgiExited();
+    }
+    if (client->isCgiExited() && client->isCgiStdinClosed() &&
+        client->isCgiStdoutClosed())
+        finishCgi(client);
+}
+
+void Server::finishCgi(Client *client) {
+    std::string res = Response::status("200", client->getServerConfig()->statusDir,
+                                       client->getCgiOutput());
+    client->appendSendData(res);
+    client->resetCgi();
 }
 
 void Server::run() {
@@ -323,6 +409,32 @@ void Server::run() {
         for (size_t i = 0; i < ready.size(); i++) {
             PollEntry &entry = ready[i];
             int fd = entry.pfd.fd;
+            bool isCgi = entry.type == POLL_CGI_STDIN ||
+                         entry.type == POLL_CGI_STDOUT;
+
+            if (isCgi && entry.client && hasClient(clients, entry.client)) {
+                if ((entry.pfd.revents & POLLOUT) &&
+                    entry.type == POLL_CGI_STDIN)
+                    handleCgiStdin(entry.client, fd);
+                if ((entry.pfd.revents & POLLIN) &&
+                    entry.type == POLL_CGI_STDOUT)
+                    handleCgiStdout(entry.client, fd);
+                if (entry.pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                    if (entry.type == POLL_CGI_STDIN &&
+                        !entry.client->isCgiStdinClosed()) {
+                        close(fd);
+                        removePollFd(fd);
+                        entry.client->markCgiStdinClosed();
+                    } else if (entry.type == POLL_CGI_STDOUT &&
+                               !entry.client->isCgiStdoutClosed()) {
+                        close(fd);
+                        removePollFd(fd);
+                        entry.client->markCgiStdoutClosed();
+                    }
+                }
+                checkCgiComplete(entry.client);
+                continue;
+            }
 
             if (entry.pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
                 if (entry.type == POLL_CLIENT && entry.client &&

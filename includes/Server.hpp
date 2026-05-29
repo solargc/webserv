@@ -16,7 +16,9 @@ class Server {
   private:
 	enum PollEntryType {
 		POLL_LISTEN,
-		POLL_CLIENT
+		POLL_CLIENT,
+		POLL_CGI_STDIN,
+		POLL_CGI_STDOUT
 	};
 
 	struct PollEntry {
@@ -32,8 +34,14 @@ class Server {
 
     void registerFd(int fd, const ServerConfig& config);
     void registerClientFd(Client *client);
+    void registerCgiFd(int fd, Client *client, PollEntryType type);
+    void removePollFd(int fd);
     void acceptClient(int listenFd, const ServerConfig *config);
     void readClient(Client *client);
+    void handleCgiStdin(Client *client, int fd);
+    void handleCgiStdout(Client *client, int fd);
+    void checkCgiComplete(Client *client);
+    void finishCgi(Client *client);
     void removeClient(Client *client);
 
 	bool isRequestComplete(const std::string &buf) const;

@@ -5,6 +5,8 @@
 
 #include <sys/socket.h>
 #include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -92,19 +94,27 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 		char *argv[] = {(char*)"/usr/bin/python3", const_cast<char*>(file.c_str()), NULL};
 		char *envp[] = {NULL};
 		execve("/usr/bin/python3", argv, envp);
+		std::exit(1);
 	}
 	else {
 		close(stdinPipe[0]);
 		close(stdoutPipe[1]);
-		write(stdinPipe[1], req.body.c_str(), req.body.size());
-		close(stdinPipe[1]);
-		char buf[4096];
-		int n = read(stdoutPipe[0], buf, sizeof(buf) - 1);
-		if (n < 0) n = 0;
-		buf[n] = '\0';
-		waitpid(pid, NULL, 0);
-		std::string res = Response::status("200", config->statusDir, buf);
-		client->appendSendData(res);
+		if (fcntl(stdinPipe[1], F_SETFL, O_NONBLOCK) < 0 ||
+			fcntl(stdoutPipe[0], F_SETFL, O_NONBLOCK) < 0) {
+			close(stdinPipe[1]);
+			close(stdoutPipe[0]);
+			std::string err = Response::status("500", *config);
+			client->appendSendData(err);
+			return;
+		}
+		client->startCgi(pid, stdinPipe[1], stdoutPipe[0], req.body);
+		registerCgiFd(stdoutPipe[0], client, POLL_CGI_STDOUT);
+		if (req.body.empty()) {
+			close(stdinPipe[1]);
+			client->markCgiStdinClosed();
+		} else {
+			registerCgiFd(stdinPipe[1], client, POLL_CGI_STDIN);
+		}
 	}
 }
 
@@ -144,32 +154,48 @@ void Server::handleGet(Request req, Client *client, const RouteConfig *route, co
 }
 
 void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
-	int pipefd[2];
-	if (pipe(pipefd) < 0) {
+	int stdinPipe[2];
+	int stdoutPipe[2];
+	if (pipe(stdinPipe) < 0) {
+		std::string err = Response::status("500", *config);
+		client->appendSendData(err);
+		return;
+	}
+	if (pipe(stdoutPipe) < 0) {
+		close(stdinPipe[0]);
+		close(stdinPipe[1]);
 		std::string err = Response::status("500", *config);
 		client->appendSendData(err);
 		return;
 	}
 	pid_t pid = fork();
 	if (pid == 0) {
-		close(pipefd[0]);
-		dup2(pipefd[1], STDOUT_FILENO);
-		close(pipefd[1]);
+		close(stdinPipe[1]);
+		close(stdoutPipe[0]);
+		dup2(stdinPipe[0], STDIN_FILENO);
+		dup2(stdoutPipe[1], STDOUT_FILENO);
+		close(stdinPipe[0]);
+		close(stdoutPipe[1]);
 		std::string file = Response::resolvePath(req, *route);
 		char *argv[] = {(char*)"/usr/bin/python3", const_cast<char*>(file.c_str()), NULL};
 		char *envp[] = {NULL};
 		execve("/usr/bin/python3", argv, envp);
+		std::exit(1);
 	}
 	else {
-		close(pipefd[1]);
-		char buf[4096];
-		int n = read(pipefd[0], buf, sizeof(buf) - 1);
-		if (n < 0) n = 0;
-		buf[n] = '\0';
-		std::cout << buf << std::endl;
-		waitpid(pid, NULL, 0);
-		std::string res = Response::status("200", config->statusDir, buf);
-		client->appendSendData(res);
+		close(stdinPipe[0]);
+		close(stdoutPipe[1]);
+		if (fcntl(stdoutPipe[0], F_SETFL, O_NONBLOCK) < 0) {
+			close(stdinPipe[1]);
+			close(stdoutPipe[0]);
+			std::string err = Response::status("500", *config);
+			client->appendSendData(err);
+			return;
+		}
+		client->startCgi(pid, stdinPipe[1], stdoutPipe[0], "");
+		close(stdinPipe[1]);
+		client->markCgiStdinClosed();
+		registerCgiFd(stdoutPipe[0], client, POLL_CGI_STDOUT);
 	}
 }
 
