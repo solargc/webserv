@@ -534,6 +534,22 @@ void Server::finishCgi(Client *client) {
     client->resetCgi();
 }
 
+bool Server::hasActiveCgi() const {
+    for (size_t i = 0; i < clients.size(); i++) {
+        if (clients[i]->hasCgi())
+            return true;
+    }
+    return false;
+}
+
+void Server::checkCgiProcesses() {
+    std::vector<Client *> snapshot(clients.begin(), clients.end());
+    for (size_t i = 0; i < snapshot.size(); i++) {
+        if (hasClient(clients, snapshot[i]))
+            checkCgiComplete(snapshot[i]);
+    }
+}
+
 void Server::run() {
     while (true) {
         if (pollEntries.empty())
@@ -554,7 +570,8 @@ void Server::run() {
         for (size_t i = 0; i < pollEntries.size(); i++)
             fds.push_back(pollEntries[i].pfd);
 
-        int pollResult = poll(&fds[0], fds.size(), -1);
+        int timeout = hasActiveCgi() ? 1000 : -1;
+        int pollResult = poll(&fds[0], fds.size(), timeout);
         if (pollResult < 0) {
             if (errno == EINTR)
                 continue;
@@ -623,5 +640,6 @@ void Server::run() {
                 }
             }
         }
+        checkCgiProcesses();
     }
 }

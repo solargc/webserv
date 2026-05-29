@@ -42,6 +42,8 @@ class Server {
     void handleCgiStdout(Client *client, int fd);
     void drainCgiStdout(Client *client, int fd);
     void checkCgiComplete(Client *client);
+    bool hasActiveCgi() const;
+    void checkCgiProcesses();
     void finishCgi(Client *client);
     void removeClient(Client *client);
 
