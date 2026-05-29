@@ -4,6 +4,7 @@
 #include "Config.hpp"
 
 #include <string>
+#include <sys/types.h>
 
 class Client {
   public:
@@ -21,12 +22,41 @@ class Client {
 	bool hasPendingData() const;
 	const std::string &getSendBuffer() const;
 	void drainSendBuffer(size_t bytes);
+
+	void startCgi(pid_t pid, int stdinFd, int stdoutFd, const std::string &input);
+	void resetCgi();
+	bool hasCgi() const;
+	pid_t getCgiPid() const;
+	int getCgiStdinFd() const;
+	int getCgiStdoutFd() const;
+	const std::string &getCgiInput() const;
+	size_t getCgiInputSent() const;
+	void addCgiInputSent(size_t bytes);
+	void appendCgiOutput(const char *buf, size_t bytes);
+	const std::string &getCgiOutput() const;
+	void markCgiStdinClosed();
+	void markCgiStdoutClosed();
+	void markCgiExited();
+	bool isCgiStdinClosed() const;
+	bool isCgiStdoutClosed() const;
+	bool isCgiExited() const;
   private:
     int fd;
 	const ServerConfig *serverConfig;
     std::string buffer;
 
 	std::string sendBuffer;
+
+	bool cgiActive;
+	pid_t cgiPid;
+	int cgiStdinFd;
+	int cgiStdoutFd;
+	std::string cgiInput;
+	size_t cgiInputSent;
+	std::string cgiOutput;
+	bool cgiStdinClosed;
+	bool cgiStdoutClosed;
+	bool cgiExited;
 };
 
 #endif
