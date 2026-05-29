@@ -88,7 +88,7 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 		dup2(stdoutPipe[1], STDOUT_FILENO);
 		close(stdinPipe[0]);
 		close(stdoutPipe[1]);
-		std::string file = route->documentRoot + req.path;
+		std::string file = Response::resolvePath(req, *route);
 		char *argv[] = {(char*)"/usr/bin/python3", const_cast<char*>(file.c_str()), NULL};
 		char *envp[] = {NULL};
 		execve("/usr/bin/python3", argv, envp);
@@ -150,7 +150,7 @@ void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const
 		close(pipefd[0]);
 		dup2(pipefd[1], STDOUT_FILENO);
 		close(pipefd[1]);
-		std::string file = route->documentRoot + req.path;
+		std::string file = Response::resolvePath(req, *route);
 		char *argv[] = {(char*)"/usr/bin/python3", const_cast<char*>(file.c_str()), NULL};
 		char *envp[] = {NULL};
 		execve("/usr/bin/python3", argv, envp);
@@ -175,7 +175,7 @@ void Server::StaticGet(Request req, Client *client, const RouteConfig *route, co
 }
 
 void Server::handleDelete(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
-	std::string file = route->documentRoot + req.path;
+	std::string file = Response::resolvePath(req, *route);
 	if (!fileExists(file)) {
 		std::string err = Response::status("404", *config);
 		client->appendSendData(err);
