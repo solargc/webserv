@@ -140,6 +140,108 @@ static bool parseContentLength(const std::string &buf, unsigned long &length) {
     return *endptr == '\0';
 }
 
+static std::string headerValue(const std::string &buf, const std::string &name) {
+    size_t pos = buf.find("\r\n");
+    if (pos == std::string::npos)
+        return "";
+    pos += 2;
+
+    while (pos < buf.size()) {
+        size_t lineEnd = buf.find("\r\n", pos);
+        if (lineEnd == std::string::npos || lineEnd == pos)
+            return "";
+        std::string line = buf.substr(pos, lineEnd - pos);
+        size_t colon = line.find(':');
+        if (colon != std::string::npos &&
+            headerNameEquals(line.substr(0, colon), name)) {
+            size_t valueStart = colon + 1;
+            while (valueStart < line.size() && line[valueStart] == ' ')
+                valueStart++;
+            return line.substr(valueStart);
+        }
+        pos = lineEnd + 2;
+    }
+    return "";
+}
+
+static bool isChunkedRequest(const std::string &buf) {
+    std::string transferEncoding = headerValue(buf, "transfer-encoding");
+    size_t pos = 0;
+    while (pos < transferEncoding.size()) {
+        while (pos < transferEncoding.size() &&
+               (transferEncoding[pos] == ' ' || transferEncoding[pos] == ','))
+            pos++;
+        size_t end = pos;
+        while (end < transferEncoding.size() && transferEncoding[end] != ',')
+            end++;
+        std::string token = transferEncoding.substr(pos, end - pos);
+        while (!token.empty() && token[token.size() - 1] == ' ')
+            token.erase(token.size() - 1);
+        if (headerNameEquals(token, "chunked"))
+            return true;
+        pos = end;
+    }
+    return false;
+}
+
+static bool parseChunkSize(const std::string &line, size_t &chunkSize) {
+    size_t end = line.find(';');
+    std::string sizePart = line.substr(0, end);
+    if (sizePart.empty())
+        return false;
+
+    char *endptr;
+    unsigned long parsed = std::strtoul(sizePart.c_str(), &endptr, 16);
+    if (*endptr != '\0')
+        return false;
+    chunkSize = static_cast<size_t>(parsed);
+    return true;
+}
+
+static bool decodeChunkedBody(const std::string &chunkedBody,
+                              std::string &decoded) {
+    decoded.clear();
+    size_t pos = 0;
+    while (true) {
+        size_t lineEnd = chunkedBody.find("\r\n", pos);
+        if (lineEnd == std::string::npos)
+            return false;
+
+        size_t chunkSize = 0;
+        if (!parseChunkSize(chunkedBody.substr(pos, lineEnd - pos), chunkSize))
+            return false;
+        pos = lineEnd + 2;
+
+        if (chunkSize == 0) {
+            size_t trailerEnd = chunkedBody.find("\r\n\r\n", pos);
+            if (trailerEnd == pos)
+                return true;
+            if (trailerEnd != std::string::npos)
+                return true;
+            if (chunkedBody.compare(pos, 2, "\r\n") == 0)
+                return true;
+            return false;
+        }
+
+        if (pos + chunkSize + 2 > chunkedBody.size())
+            return false;
+        decoded.append(chunkedBody, pos, chunkSize);
+        pos += chunkSize;
+        if (chunkedBody.compare(pos, 2, "\r\n") != 0)
+            return false;
+        pos += 2;
+    }
+}
+
+static bool chunkedRequestComplete(const std::string &buf) {
+    size_t bodyPos = buf.find("\r\n\r\n");
+    if (bodyPos == std::string::npos)
+        return false;
+    bodyPos += 4;
+    std::string decoded;
+    return decodeChunkedBody(buf.substr(bodyPos), decoded);
+}
+
 void Server::acceptClient(int listenFd, const ServerConfig *config) {
     while (true) {
         int fd = accept(listenFd, NULL, NULL);
@@ -161,6 +263,9 @@ void Server::acceptClient(int listenFd, const ServerConfig *config) {
 }
 
 bool Server::isRequestComplete(const std::string &buf) const {
+    if (isChunkedRequest(buf))
+        return chunkedRequestComplete(buf);
+
     unsigned long conLen = 0;
     if (!parseContentLength(buf, conLen))
         return true;
@@ -255,6 +360,23 @@ void Server::readClient(Client *client) {
         client->clearData();
         std::cout << "Bad request" << std::endl;
         return;
+    }
+    if (isChunkedRequest(buf)) {
+        std::string decodedBody;
+        if (!decodeChunkedBody(req.body, decodedBody)) {
+            std::string err = Response::status("400", *config);
+            client->appendSendData(err);
+            client->clearData();
+            return;
+        }
+        req.body = decodedBody;
+        if (config->clientMaxBodySize != 0 &&
+            req.body.size() > config->clientMaxBodySize) {
+            std::string err = Response::status("413", *config);
+            client->appendSendData(err);
+            client->clearData();
+            return;
+        }
     }
 
     const RouteConfig *route = findRoute(req, config);
