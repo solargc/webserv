@@ -127,10 +127,13 @@ std::string Response::defaultStatus(std::string code) {
 		return formResponse("405 Method not allowed");
 	else if (code == "413")
 		return formResponse("413 Payload Too Large");
+	else if (code == "500")
+		return formResponse("500 Internal Server Error");
 	else if (code == "201")
 		return formResponse("201 Created");
-	else
+	else if (code == "204")
 		return formResponse("204 No Content");
+	return formResponse("500 Internal Server Error");
 }
 
 std::string Response::status(std::string code, std::string statusDir, std::ifstream& file200) {
