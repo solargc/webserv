@@ -25,6 +25,7 @@ class Response {
 	static std::string statusWithBody(std::string code, std::string body);
 	static std::string statusText(std::string code);
 	static std::string redirect(int code, const std::string &target);
+	static std::string fromCgiOutput(const std::string &output);
 	static std::string resolvePath(const Request &req, const RouteConfig &route);
 	static std::string autoindex(const std::string &requestPath,
 								 const std::string &directoryPath);

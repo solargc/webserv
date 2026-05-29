@@ -369,8 +369,7 @@ void Server::checkCgiComplete(Client *client) {
 }
 
 void Server::finishCgi(Client *client) {
-    std::string res = Response::status("200", client->getServerConfig()->statusDir,
-                                       client->getCgiOutput());
+    std::string res = Response::fromCgiOutput(client->getCgiOutput());
     client->appendSendData(res);
     client->resetCgi();
 }
