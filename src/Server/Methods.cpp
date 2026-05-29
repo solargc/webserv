@@ -186,7 +186,11 @@ void Server::handleDelete(Request req, Client *client, const RouteConfig *route,
 		client->appendSendData(err);
 		return;
 	}
-	remove(file.c_str());
+	if (std::remove(file.c_str()) != 0) {
+		std::string err = Response::status("500", *config);
+		client->appendSendData(err);
+		return;
+	}
 	std::string res = Response::status("204", *config);
 	client->appendSendData(res);
 }
