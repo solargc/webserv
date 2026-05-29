@@ -6,7 +6,6 @@
 #include "Request.hpp"
 #include <poll.h>
 #include <vector>
-#include <map>
 
 class Server {
   public:
@@ -15,14 +14,25 @@ class Server {
     void run();
 
   private:
-    std::vector<pollfd> fds;
+	enum PollEntryType {
+		POLL_LISTEN,
+		POLL_CLIENT
+	};
+
+	struct PollEntry {
+		pollfd pfd;
+		PollEntryType type;
+		Client *client;
+		const ServerConfig *config;
+	};
+
+    std::vector<PollEntry> pollEntries;
     std::vector<Client *> clients;
 	std::vector<ServerConfig> _configs;
-	std::map<int, const ServerConfig*> listenFdToConfig;
 
     void registerFd(int fd, const ServerConfig& config);
-    bool isListenSocket(int fd) const;
-    void acceptClient(int listenFd);
+    void registerClientFd(Client *client);
+    void acceptClient(int listenFd, const ServerConfig *config);
     void readClient(Client *client);
     void removeClient(Client *client);
 

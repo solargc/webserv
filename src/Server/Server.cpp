@@ -25,32 +25,38 @@ Server::~Server() {
     for (size_t i = 0; i < clients.size(); i++) {
         delete clients[i];
     }
-    for (std::map<int, const ServerConfig *>::iterator it =
-             listenFdToConfig.begin();
-         it != listenFdToConfig.end(); it++) {
-        close(it->first);
+    for (size_t i = 0; i < pollEntries.size(); i++) {
+        if (pollEntries[i].type == POLL_LISTEN)
+            close(pollEntries[i].pfd.fd);
     }
 }
 
 void Server::registerFd(int fd, const ServerConfig &config) {
-    pollfd pfd = {};
-    pfd.fd = fd;
-    pfd.events = POLLIN;
-    fds.push_back(pfd);
-
-    listenFdToConfig[fd] = &config;
+    PollEntry entry = {};
+    entry.pfd.fd = fd;
+    entry.pfd.events = POLLIN;
+    entry.type = POLL_LISTEN;
+    entry.client = NULL;
+    entry.config = &config;
+    pollEntries.push_back(entry);
 }
 
-bool Server::isListenSocket(int fd) const {
-    return listenFdToConfig.find(fd) != listenFdToConfig.end();
+void Server::registerClientFd(Client *client) {
+    PollEntry entry = {};
+    entry.pfd.fd = client->getFd();
+    entry.pfd.events = POLLIN;
+    entry.type = POLL_CLIENT;
+    entry.client = client;
+    entry.config = NULL;
+    pollEntries.push_back(entry);
 }
 
-static Client *findClient(std::vector<Client *> &clients, int fd) {
+static bool hasClient(const std::vector<Client *> &clients, Client *client) {
     for (size_t i = 0; i < clients.size(); i++) {
-        if (clients[i]->getFd() == fd)
-            return clients[i];
+        if (clients[i] == client)
+            return true;
     }
-    return NULL;
+    return false;
 }
 
 static bool headerNameEquals(const std::string &actual,
@@ -107,7 +113,7 @@ static bool parseContentLength(const std::string &buf, unsigned long &length) {
     return *endptr == '\0';
 }
 
-void Server::acceptClient(int listenFd) {
+void Server::acceptClient(int listenFd, const ServerConfig *config) {
     while (true) {
         int fd = accept(listenFd, NULL, NULL);
         if (fd < 0) {
@@ -121,12 +127,9 @@ void Server::acceptClient(int listenFd) {
             close(fd);
             continue;
         }
-        pollfd pfd = {};
-        pfd.fd = fd;
-        pfd.events = POLLIN;
-        fds.push_back(pfd);
-        const ServerConfig *config = listenFdToConfig[listenFd];
-        clients.push_back(new Client(fd, config));
+        Client *client = new Client(fd, config);
+        clients.push_back(client);
+        registerClientFd(client);
     }
 }
 
@@ -277,29 +280,34 @@ void Server::removeClient(Client *client) {
             break;
         }
     }
-    for (size_t i = 0; i < fds.size(); i++) {
-        if (fds[i].fd == fd) {
-            fds.erase(fds.begin() + i);
-            break;
+    for (size_t i = 0; i < pollEntries.size();) {
+        if (pollEntries[i].type == POLL_CLIENT && pollEntries[i].pfd.fd == fd) {
+            pollEntries.erase(pollEntries.begin() + i);
+        } else {
+            i++;
         }
     }
 }
 
 void Server::run() {
     while (true) {
-        if (fds.empty())
+        if (pollEntries.empty())
             throw std::runtime_error("No sockets configured");
 
         // Register POLLOUT for clients with pending data
-        for (size_t i = 0; i < fds.size(); i++) {
-            if (isListenSocket(fds[i].fd))
+        for (size_t i = 0; i < pollEntries.size(); i++) {
+            if (pollEntries[i].type != POLL_CLIENT)
                 continue;
-            Client *client = findClient(clients, fds[i].fd);
+            Client *client = pollEntries[i].client;
             if (client && client->hasPendingData())
-                fds[i].events = POLLIN | POLLOUT;
+                pollEntries[i].pfd.events = POLLIN | POLLOUT;
             else
-                fds[i].events = POLLIN;
+                pollEntries[i].pfd.events = POLLIN;
         }
+
+        std::vector<pollfd> fds;
+        for (size_t i = 0; i < pollEntries.size(); i++)
+            fds.push_back(pollEntries[i].pfd);
 
         int pollResult = poll(&fds[0], fds.size(), -1);
         if (pollResult < 0) {
@@ -308,32 +316,34 @@ void Server::run() {
             throw std::runtime_error("poll() failed");
         }
 
-        std::vector<pollfd> ready(fds.begin(), fds.end());
-        for (size_t i = 0; i < ready.size(); i++) {
-            int fd = ready[i].fd;
+        std::vector<PollEntry> ready(pollEntries.begin(), pollEntries.end());
+        for (size_t i = 0; i < ready.size(); i++)
+            ready[i].pfd.revents = fds[i].revents;
 
-            if (ready[i].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-                if (!isListenSocket(fd)) {
-                    Client *client = findClient(clients, fd);
-                    if (client)
-                        removeClient(client);
-                }
+        for (size_t i = 0; i < ready.size(); i++) {
+            PollEntry &entry = ready[i];
+            int fd = entry.pfd.fd;
+
+            if (entry.pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                if (entry.type == POLL_CLIENT && entry.client &&
+                    hasClient(clients, entry.client))
+                    removeClient(entry.client);
                 continue;
             }
 
-            if (ready[i].revents & POLLIN) {
-                if (isListenSocket(fd)) {
-                    acceptClient(fd);
-                } else {
-                    Client *client = findClient(clients, fd);
-                    if (client)
-                        readClient(client);
+            if (entry.pfd.revents & POLLIN) {
+                if (entry.type == POLL_LISTEN) {
+                    acceptClient(fd, entry.config);
+                } else if (entry.type == POLL_CLIENT && entry.client &&
+                           hasClient(clients, entry.client)) {
+                    readClient(entry.client);
                 }
             }
 
-            if (ready[i].revents & POLLOUT) {
-                Client *client = findClient(clients, fd);
-                if (client && client->hasPendingData()) {
+            if (entry.pfd.revents & POLLOUT) {
+                Client *client = entry.client;
+                if (entry.type == POLL_CLIENT && client &&
+                    hasClient(clients, client) && client->hasPendingData()) {
                     const std::string &buf = client->getSendBuffer();
                     ssize_t n = send(fd, buf.c_str(), buf.size(), 0);
                     if (n > 0)
