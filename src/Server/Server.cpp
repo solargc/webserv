@@ -11,7 +11,11 @@
 #include <stdexcept>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <ctime>
+#include <signal.h>
 #include <unistd.h>
+
+static const int CGI_TIMEOUT_SECONDS = 5;
 
 Server::Server(const std::vector<ServerConfig> &configs) : _configs(configs) {
     for (size_t i = 0; i < _configs.size(); i++) {
@@ -357,6 +361,24 @@ void Server::handleCgiStdout(Client *client, int fd) {
 void Server::checkCgiComplete(Client *client) {
     if (!client->hasCgi())
         return;
+    if (client->getCgiStartedAt() > 0 &&
+        time(NULL) - client->getCgiStartedAt() > CGI_TIMEOUT_SECONDS) {
+        kill(client->getCgiPid(), SIGKILL);
+        if (!client->isCgiStdinClosed()) {
+            removePollFd(client->getCgiStdinFd());
+            close(client->getCgiStdinFd());
+            client->markCgiStdinClosed();
+        }
+        if (!client->isCgiStdoutClosed()) {
+            removePollFd(client->getCgiStdoutFd());
+            close(client->getCgiStdoutFd());
+            client->markCgiStdoutClosed();
+        }
+        waitpid(client->getCgiPid(), NULL, 0);
+        client->appendSendData(Response::status("500", *client->getServerConfig()));
+        client->resetCgi();
+        return;
+    }
     if (!client->isCgiExited()) {
         int status = 0;
         pid_t result = waitpid(client->getCgiPid(), &status, WNOHANG);

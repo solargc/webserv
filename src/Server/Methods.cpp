@@ -143,6 +143,22 @@ static std::string resolveScriptPath(Request req, const RouteConfig *route) {
 	return Response::resolvePath(req, *route);
 }
 
+static std::string directoryName(const std::string &path) {
+	size_t slash = path.find_last_of('/');
+	if (slash == std::string::npos)
+		return ".";
+	if (slash == 0)
+		return "/";
+	return path.substr(0, slash);
+}
+
+static std::string baseName(const std::string &path) {
+	size_t slash = path.find_last_of('/');
+	if (slash == std::string::npos)
+		return path;
+	return path.substr(slash + 1);
+}
+
 bool Server::directoryExists(const char* path) {
     struct stat info;
 
@@ -207,12 +223,16 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 		close(stdinPipe[0]);
 		close(stdoutPipe[1]);
 		std::string file = resolveScriptPath(req, route);
+		std::string scriptDir = directoryName(file);
+		std::string scriptName = baseName(file);
+		if (chdir(scriptDir.c_str()) != 0)
+			std::exit(1);
 		std::vector<std::string> env = buildCgiEnv(req, route, config, file);
 		std::vector<char *> envp;
 		for (size_t i = 0; i < env.size(); i++)
 			envp.push_back(const_cast<char *>(env[i].c_str()));
 		envp.push_back(NULL);
-		char *argv[] = {const_cast<char*>(interpreter.c_str()), const_cast<char*>(file.c_str()), NULL};
+		char *argv[] = {const_cast<char*>(interpreter.c_str()), const_cast<char*>(scriptName.c_str()), NULL};
 		execve(interpreter.c_str(), argv, &envp[0]);
 		std::exit(1);
 	}
@@ -298,12 +318,16 @@ void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const
 		close(stdinPipe[0]);
 		close(stdoutPipe[1]);
 		std::string file = resolveScriptPath(req, route);
+		std::string scriptDir = directoryName(file);
+		std::string scriptName = baseName(file);
+		if (chdir(scriptDir.c_str()) != 0)
+			std::exit(1);
 		std::vector<std::string> env = buildCgiEnv(req, route, config, file);
 		std::vector<char *> envp;
 		for (size_t i = 0; i < env.size(); i++)
 			envp.push_back(const_cast<char *>(env[i].c_str()));
 		envp.push_back(NULL);
-		char *argv[] = {const_cast<char*>(interpreter.c_str()), const_cast<char*>(file.c_str()), NULL};
+		char *argv[] = {const_cast<char*>(interpreter.c_str()), const_cast<char*>(scriptName.c_str()), NULL};
 		execve(interpreter.c_str(), argv, &envp[0]);
 		std::exit(1);
 	}

@@ -4,6 +4,7 @@
 #include "Config.hpp"
 
 #include <string>
+#include <ctime>
 #include <sys/types.h>
 
 class Client {
@@ -27,6 +28,7 @@ class Client {
 	void resetCgi();
 	bool hasCgi() const;
 	pid_t getCgiPid() const;
+	time_t getCgiStartedAt() const;
 	int getCgiStdinFd() const;
 	int getCgiStdoutFd() const;
 	const std::string &getCgiInput() const;
@@ -49,6 +51,7 @@ class Client {
 
 	bool cgiActive;
 	pid_t cgiPid;
+	time_t cgiStartedAt;
 	int cgiStdinFd;
 	int cgiStdoutFd;
 	std::string cgiInput;

@@ -3,7 +3,7 @@
 
 Client::Client(int fd, const ServerConfig* config)
 	: fd(fd), serverConfig(config), cgiActive(false), cgiPid(-1),
-	  cgiStdinFd(-1), cgiStdoutFd(-1), cgiInputSent(0),
+	  cgiStartedAt(0), cgiStdinFd(-1), cgiStdoutFd(-1), cgiInputSent(0),
 	  cgiStdinClosed(true), cgiStdoutClosed(true), cgiExited(true) {}
 
 Client::~Client() {
@@ -51,6 +51,7 @@ void Client::startCgi(pid_t pid, int stdinFd, int stdoutFd,
 					  const std::string &input) {
 	cgiActive = true;
 	cgiPid = pid;
+	cgiStartedAt = time(NULL);
 	cgiStdinFd = stdinFd;
 	cgiStdoutFd = stdoutFd;
 	cgiInput = input;
@@ -68,6 +69,7 @@ void Client::resetCgi() {
 		close(cgiStdoutFd);
 	cgiActive = false;
 	cgiPid = -1;
+	cgiStartedAt = 0;
 	cgiStdinFd = -1;
 	cgiStdoutFd = -1;
 	cgiInput.clear();
@@ -84,6 +86,10 @@ bool Client::hasCgi() const {
 
 pid_t Client::getCgiPid() const {
 	return cgiPid;
+}
+
+time_t Client::getCgiStartedAt() const {
+	return cgiStartedAt;
 }
 
 int Client::getCgiStdinFd() const {
