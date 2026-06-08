@@ -146,7 +146,7 @@
       const el = document.getElementById('helloResponse');
       el.textContent = 'Loading...';
       try {
-        const res = await fetch('/python/helloWorld.py');
+        const res = await fetch('/cgi-bin/helloWorld.py');
         el.textContent = await res.text();
       } catch(e) {
         el.textContent = 'Error: ' + e.message;
@@ -158,7 +158,7 @@
       const val = document.getElementById('addInput').value;
       el.textContent = 'Loading...';
       try {
-        const res = await fetch('/python/addition.py', {
+        const res = await fetch('/cgi-bin/addition.py', {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
           body: val
@@ -174,7 +174,7 @@
       const val = document.getElementById('strInput').value;
       el.textContent = 'Loading...';
       try {
-        const res = await fetch('/python/printString.py', {
+        const res = await fetch('/cgi-bin/printString.py', {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
           body: val
