@@ -17,6 +17,8 @@ struct RouteConfig {
     int redirectCode;
     std::string redirectTarget;
     std::map<std::string, std::string> cgi;
+    bool hasMaxBodySize;
+    size_t clientMaxBodySize;
 };
 
 struct ServerConfig {

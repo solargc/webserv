@@ -17,6 +17,13 @@
 
 static const int CGI_TIMEOUT_SECONDS = 5;
 
+static bool setCloseOnExec(int fd) {
+    int flags = fcntl(fd, F_GETFD);
+    if (flags < 0)
+        return false;
+    return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
+}
+
 Server::Server(const std::vector<ServerConfig> &configs) : _configs(configs) {
     for (size_t i = 0; i < _configs.size(); i++) {
         int fd = createListenSocket(_configs[i]);
@@ -238,8 +245,9 @@ static bool chunkedRequestComplete(const std::string &buf) {
     if (bodyPos == std::string::npos)
         return false;
     bodyPos += 4;
-    std::string decoded;
-    return decodeChunkedBody(buf.substr(bodyPos), decoded);
+    if (buf.size() - bodyPos < 5)
+        return false;
+    return buf.compare(buf.size() - 5, 5, "0\r\n\r\n") == 0;
 }
 
 void Server::acceptClient(int listenFd, const ServerConfig *config) {
@@ -253,6 +261,10 @@ void Server::acceptClient(int listenFd, const ServerConfig *config) {
             return;
         }
         if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
+            close(fd);
+            continue;
+        }
+        if (!setCloseOnExec(fd)) {
             close(fd);
             continue;
         }
@@ -324,6 +336,32 @@ const RouteConfig *Server::findRoute(const Request &req,
     return best;
 }
 
+static size_t effectiveBodyLimit(const std::string &buf,
+                                 const ServerConfig *config) {
+    size_t limit = config->clientMaxBodySize;
+    size_t lineEnd = buf.find("\r\n");
+    std::string line = buf.substr(0, lineEnd);
+    size_t sp1 = line.find(' ');
+    if (sp1 == std::string::npos)
+        return limit;
+    size_t sp2 = line.find(' ', sp1 + 1);
+    std::string path = line.substr(sp1 + 1, sp2 - sp1 - 1);
+    size_t query = path.find('?');
+    if (query != std::string::npos)
+        path = path.substr(0, query);
+
+    const RouteConfig *best = NULL;
+    for (size_t i = 0; i < config->routes.size(); i++) {
+        if (!routeMatchesPath(config->routes[i].path, path))
+            continue;
+        if (best == NULL || config->routes[i].path.size() > best->path.size())
+            best = &config->routes[i];
+    }
+    if (best != NULL && best->hasMaxBodySize)
+        limit = best->clientMaxBodySize;
+    return limit;
+}
+
 void Server::readClient(Client *client) {
     char buffer[4096];
     ssize_t n = recv(client->getFd(), buffer, sizeof(buffer), 0);
@@ -342,8 +380,10 @@ void Server::readClient(Client *client) {
         return;
 
     const ServerConfig *config = client->getServerConfig();
-    if (contentLengthExceedsLimit(buf, config->clientMaxBodySize) ||
-        bodyExceedsLimit(buf, config->clientMaxBodySize)) {
+    size_t bodyLimit = effectiveBodyLimit(buf, config);
+    if (!isChunkedRequest(buf) &&
+        (contentLengthExceedsLimit(buf, bodyLimit) ||
+         bodyExceedsLimit(buf, bodyLimit))) {
         std::string err = Response::status("413", *config);
         client->appendSendData(err);
         client->clearData();
@@ -370,8 +410,7 @@ void Server::readClient(Client *client) {
             return;
         }
         req.body = decodedBody;
-        if (config->clientMaxBodySize != 0 &&
-            req.body.size() > config->clientMaxBodySize) {
+        if (bodyLimit != 0 && req.body.size() > bodyLimit) {
             std::string err = Response::status("413", *config);
             client->appendSendData(err);
             client->clearData();
@@ -395,6 +434,9 @@ void Server::readClient(Client *client) {
         return;
     }
 
+    bool head = (req.method == "HEAD");
+    size_t responseStart = client->getSendBuffer().size();
+
     size_t i = 0;
     for (; i < route->allowedMethods.size(); i++) {
         if (route->allowedMethods[i] == req.method) {
@@ -406,9 +448,14 @@ void Server::readClient(Client *client) {
     if (i >= route->allowedMethods.size()) {
         std::string err = Response::status("405", *config);
         client->appendSendData(err);
+        if (head)
+            client->stripBodyFrom(responseStart);
         client->clearData();
         return;
     }
+
+    if (head)
+        client->stripBodyFrom(responseStart);
 
     std::cout << "Method:  " << req.method << std::endl;
     std::cout << "Path:    " << req.path << std::endl;
@@ -452,9 +499,12 @@ void Server::handleCgiStdin(Client *client, int fd) {
     }
 
     ssize_t n = write(fd, input.c_str() + sent, input.size() - sent);
-    if (n > 0)
+    if (n > 0) {
         client->addCgiInputSent(n);
-    else {
+        client->refreshCgiActivity();
+    } else {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return;
         close(fd);
         removePollFd(fd);
         client->markCgiStdinClosed();
@@ -473,8 +523,11 @@ void Server::handleCgiStdout(Client *client, int fd) {
     ssize_t n = read(fd, buffer, sizeof(buffer));
     if (n > 0) {
         client->appendCgiOutput(buffer, n);
+        client->refreshCgiActivity();
         return;
     }
+    if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+        return;
     close(fd);
     removePollFd(fd);
     client->markCgiStdoutClosed();
@@ -487,8 +540,11 @@ void Server::drainCgiStdout(Client *client, int fd) {
         ssize_t n = read(fd, buffer, sizeof(buffer));
         if (n > 0) {
             client->appendCgiOutput(buffer, n);
+            client->refreshCgiActivity();
             continue;
         }
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            return;
         close(fd);
         removePollFd(fd);
         client->markCgiStdoutClosed();

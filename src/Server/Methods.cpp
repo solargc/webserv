@@ -100,14 +100,13 @@ static std::vector<std::string> buildCgiEnv(const Request &req,
 	env.push_back("REQUEST_METHOD=" + req.method);
 	env.push_back("QUERY_STRING=" + queryString(req.path));
 	env.push_back("SCRIPT_FILENAME=" + scriptPath);
-	env.push_back("SCRIPT_NAME=" + pathWithoutQuery(req.path));
-	env.push_back("PATH_INFO=");
+	env.push_back("SCRIPT_NAME=");
+	env.push_back("PATH_INFO=" + scriptPath);
 	env.push_back("SERVER_PROTOCOL=" + req.version);
 	env.push_back("SERVER_SOFTWARE=webserv");
 	env.push_back("SERVER_NAME=" + config->host);
 	env.push_back("SERVER_PORT=" + intToString(config->port));
 	env.push_back("DOCUMENT_ROOT=" + route->documentRoot);
-	env.push_back("REQUEST_URI=" + req.path);
 	env.push_back("CONTENT_LENGTH=" + contentLength);
 	env.push_back("CONTENT_TYPE=" + headerValue(req, "Content-Type"));
 	env.push_back("REDIRECT_STATUS=200");
@@ -157,6 +156,22 @@ static std::string baseName(const std::string &path) {
 	if (slash == std::string::npos)
 		return path;
 	return path.substr(slash + 1);
+}
+
+static std::string absolutePath(const std::string &path) {
+	if (path.empty() || path[0] == '/')
+		return path;
+	char cwd[4096];
+	if (getcwd(cwd, sizeof(cwd)) == NULL)
+		return path;
+	return std::string(cwd) + "/" + path;
+}
+
+static bool setCloseOnExec(int fd) {
+	int flags = fcntl(fd, F_GETFD);
+	if (flags < 0)
+		return false;
+	return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
 }
 
 bool Server::directoryExists(const char* path) {
@@ -214,6 +229,16 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 		client->appendSendData(err);
 		return;
 	}
+	if (!setCloseOnExec(stdinPipe[0]) || !setCloseOnExec(stdinPipe[1]) ||
+		!setCloseOnExec(stdoutPipe[0]) || !setCloseOnExec(stdoutPipe[1])) {
+		close(stdinPipe[0]);
+		close(stdinPipe[1]);
+		close(stdoutPipe[0]);
+		close(stdoutPipe[1]);
+		std::string err = Response::status("500", *config);
+		client->appendSendData(err);
+		return;
+	}
 	pid_t pid = fork();
 	if (pid == 0) {
 		close(stdinPipe[1]);
@@ -225,15 +250,17 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 		std::string file = resolveScriptPath(req, route);
 		std::string scriptDir = directoryName(file);
 		std::string scriptName = baseName(file);
+		std::string exe = absolutePath(interpreter);
+		std::string absScript = absolutePath(file);
 		if (chdir(scriptDir.c_str()) != 0)
 			std::exit(1);
-		std::vector<std::string> env = buildCgiEnv(req, route, config, file);
+		std::vector<std::string> env = buildCgiEnv(req, route, config, absScript);
 		std::vector<char *> envp;
 		for (size_t i = 0; i < env.size(); i++)
 			envp.push_back(const_cast<char *>(env[i].c_str()));
 		envp.push_back(NULL);
-		char *argv[] = {const_cast<char*>(interpreter.c_str()), const_cast<char*>(scriptName.c_str()), NULL};
-		execve(interpreter.c_str(), argv, &envp[0]);
+		char *argv[] = {const_cast<char*>(exe.c_str()), const_cast<char*>(scriptName.c_str()), NULL};
+		execve(exe.c_str(), argv, &envp[0]);
 		std::exit(1);
 	}
 	else {
@@ -309,6 +336,16 @@ void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const
 		client->appendSendData(err);
 		return;
 	}
+	if (!setCloseOnExec(stdinPipe[0]) || !setCloseOnExec(stdinPipe[1]) ||
+		!setCloseOnExec(stdoutPipe[0]) || !setCloseOnExec(stdoutPipe[1])) {
+		close(stdinPipe[0]);
+		close(stdinPipe[1]);
+		close(stdoutPipe[0]);
+		close(stdoutPipe[1]);
+		std::string err = Response::status("500", *config);
+		client->appendSendData(err);
+		return;
+	}
 	pid_t pid = fork();
 	if (pid == 0) {
 		close(stdinPipe[1]);
@@ -320,15 +357,17 @@ void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const
 		std::string file = resolveScriptPath(req, route);
 		std::string scriptDir = directoryName(file);
 		std::string scriptName = baseName(file);
+		std::string exe = absolutePath(interpreter);
+		std::string absScript = absolutePath(file);
 		if (chdir(scriptDir.c_str()) != 0)
 			std::exit(1);
-		std::vector<std::string> env = buildCgiEnv(req, route, config, file);
+		std::vector<std::string> env = buildCgiEnv(req, route, config, absScript);
 		std::vector<char *> envp;
 		for (size_t i = 0; i < env.size(); i++)
 			envp.push_back(const_cast<char *>(env[i].c_str()));
 		envp.push_back(NULL);
-		char *argv[] = {const_cast<char*>(interpreter.c_str()), const_cast<char*>(scriptName.c_str()), NULL};
-		execve(interpreter.c_str(), argv, &envp[0]);
+		char *argv[] = {const_cast<char*>(exe.c_str()), const_cast<char*>(scriptName.c_str()), NULL};
+		execve(exe.c_str(), argv, &envp[0]);
 		std::exit(1);
 	}
 	else {

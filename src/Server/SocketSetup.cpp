@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <sys/socket.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 static int createTcpSocket() {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -12,6 +13,13 @@ static int createTcpSocket() {
     int opt = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     return fd;
+}
+
+static bool setCloseOnExec(int fd) {
+    int flags = fcntl(fd, F_GETFD);
+    if (flags < 0)
+        return false;
+    return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
 }
 
 static sockaddr_in resolveAddress(const ServerConfig &cfg) {
@@ -37,6 +45,13 @@ int createListenSocket(const ServerConfig &cfg) {
     if (listen(fd, 128) < 0) {
         throw std::runtime_error("listen() failed");
 	}
-	fcntl(fd, F_SETFL, O_NONBLOCK);
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
+		close(fd);
+		throw std::runtime_error("fcntl() failed");
+	}
+	if (!setCloseOnExec(fd)) {
+		close(fd);
+		throw std::runtime_error("fcntl() failed");
+	}
     return fd;
 }

@@ -47,6 +47,13 @@ void Client::drainSendBuffer(size_t bytes) {
 	sendBuffer.erase(0, bytes);
 }
 
+void Client::stripBodyFrom(size_t responseStart) {
+	size_t headerEnd = sendBuffer.find("\r\n\r\n", responseStart);
+	if (headerEnd == std::string::npos)
+		return;
+	sendBuffer.erase(headerEnd + 4);
+}
+
 void Client::startCgi(pid_t pid, int stdinFd, int stdoutFd,
 					  const std::string &input) {
 	cgiActive = true;
@@ -90,6 +97,10 @@ pid_t Client::getCgiPid() const {
 
 time_t Client::getCgiStartedAt() const {
 	return cgiStartedAt;
+}
+
+void Client::refreshCgiActivity() {
+	cgiStartedAt = time(NULL);
 }
 
 int Client::getCgiStdinFd() const {

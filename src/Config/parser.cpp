@@ -52,6 +52,8 @@ RouteConfig Config::parseRoute(const std::vector<std::string> &tokens,
     route.autoindex = false;
     route.hasRedirect = false;
     route.redirectCode = 0;
+    route.hasMaxBodySize = false;
+    route.clientMaxBodySize = 0;
 
     if (i >= tokens.size())
         throw std::runtime_error("Expected location path");
@@ -131,6 +133,16 @@ RouteConfig Config::parseRoute(const std::vector<std::string> &tokens,
             i++;
             if (i >= tokens.size() || tokens[i] != ";")
                 throw std::runtime_error("Expected ';' after redirect target");
+            i++;
+        } else if (tokens[i] == "client_max_body_size") {
+            i++;
+            if (i >= tokens.size())
+                throw std::runtime_error("Expected value after 'client_max_body_size'");
+            route.clientMaxBodySize = parseBodySize(tokens[i]);
+            route.hasMaxBodySize = true;
+            i++;
+            if (i >= tokens.size() || tokens[i] != ";")
+                throw std::runtime_error("Expected ';' after client_max_body_size value");
             i++;
         } else if (tokens[i] == "cgi_extension" || tokens[i] == "cgi") {
             std::string directive = tokens[i];

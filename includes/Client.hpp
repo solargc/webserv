@@ -23,12 +23,14 @@ class Client {
 	bool hasPendingData() const;
 	const std::string &getSendBuffer() const;
 	void drainSendBuffer(size_t bytes);
+	void stripBodyFrom(size_t responseStart);
 
 	void startCgi(pid_t pid, int stdinFd, int stdoutFd, const std::string &input);
 	void resetCgi();
 	bool hasCgi() const;
 	pid_t getCgiPid() const;
 	time_t getCgiStartedAt() const;
+	void refreshCgiActivity();
 	int getCgiStdinFd() const;
 	int getCgiStdoutFd() const;
 	const std::string &getCgiInput() const;

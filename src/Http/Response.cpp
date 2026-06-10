@@ -65,7 +65,7 @@ void Response::compose(const Request& req, const RouteConfig& route, const Serve
 			raw = autoindex(req.path, filePath);
 			return;
 		}
-		raw = status("403", config);
+		raw = status("404", config);
 		return;
 	}
 	std::ifstream file(filePath.c_str());
