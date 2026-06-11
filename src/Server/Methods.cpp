@@ -168,10 +168,7 @@ static std::string absolutePath(const std::string &path) {
 }
 
 static bool setCloseOnExec(int fd) {
-	int flags = fcntl(fd, F_GETFD);
-	if (flags < 0)
-		return false;
-	return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
+	return fcntl(fd, F_SETFD, FD_CLOEXEC) == 0;
 }
 
 bool Server::directoryExists(const char* path) {
@@ -274,9 +271,10 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 			client->appendSendData(err);
 			return;
 		}
+		bool hasBody = !req.body.empty();
 		client->startCgi(pid, stdinPipe[1], stdoutPipe[0], req.body);
 		registerCgiFd(stdoutPipe[0], client, POLL_CGI_STDOUT);
-		if (req.body.empty()) {
+		if (!hasBody) {
 			close(stdinPipe[1]);
 			client->markCgiStdinClosed();
 		} else {
@@ -286,7 +284,6 @@ void Server::CGIPost(Request req, Client *client, const RouteConfig *route, cons
 }
 
 void Server::StaticPost(Request req, Client *client, const RouteConfig *route, const ServerConfig* config) {
-	std::cout << "static post entered" << std::endl;
 	if (route->uploadPath.empty()) {
 		std::string err = Response::status("403", *config);
 		client->appendSendData(err);
@@ -380,7 +377,8 @@ void Server::CGIGet(Request req, Client *client, const RouteConfig *route, const
 			client->appendSendData(err);
 			return;
 		}
-		client->startCgi(pid, stdinPipe[1], stdoutPipe[0], "");
+		std::string emptyInput;
+		client->startCgi(pid, stdinPipe[1], stdoutPipe[0], emptyInput);
 		close(stdinPipe[1]);
 		client->markCgiStdinClosed();
 		registerCgiFd(stdoutPipe[0], client, POLL_CGI_STDOUT);

@@ -18,10 +18,7 @@
 static const int CGI_TIMEOUT_SECONDS = 5;
 
 static bool setCloseOnExec(int fd) {
-    int flags = fcntl(fd, F_GETFD);
-    if (flags < 0)
-        return false;
-    return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
+    return fcntl(fd, F_SETFD, FD_CLOEXEC) == 0;
 }
 
 Server::Server(const std::vector<ServerConfig> &configs) : _configs(configs) {
@@ -457,13 +454,6 @@ void Server::readClient(Client *client) {
     if (head)
         client->stripBodyFrom(responseStart);
 
-    std::cout << "Method:  " << req.method << std::endl;
-    std::cout << "Path:    " << req.path << std::endl;
-    std::cout << "Version: " << req.version << std::endl;
-    for (std::map<std::string, std::string>::iterator it = req.headers.begin();
-         it != req.headers.end(); ++it)
-        std::cout << "Header:  " << it->first << ": " << it->second
-                  << std::endl;
     client->clearData();
 }
 
@@ -502,9 +492,9 @@ void Server::handleCgiStdin(Client *client, int fd) {
     if (n > 0) {
         client->addCgiInputSent(n);
         client->refreshCgiActivity();
+    } else if (n < 0) {
+        return;
     } else {
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return;
         close(fd);
         removePollFd(fd);
         client->markCgiStdinClosed();
@@ -526,7 +516,7 @@ void Server::handleCgiStdout(Client *client, int fd) {
         client->refreshCgiActivity();
         return;
     }
-    if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+    if (n < 0)
         return;
     close(fd);
     removePollFd(fd);
@@ -535,16 +525,24 @@ void Server::handleCgiStdout(Client *client, int fd) {
 
 void Server::drainCgiStdout(Client *client, int fd) {
     char buffer[4096];
+    bool madeProgress = false;
 
     while (true) {
         ssize_t n = read(fd, buffer, sizeof(buffer));
         if (n > 0) {
             client->appendCgiOutput(buffer, n);
             client->refreshCgiActivity();
+            madeProgress = true;
             continue;
         }
-        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+        if (n < 0) {
+            if (client->hasCgiStdoutHangup() && !madeProgress) {
+                close(fd);
+                removePollFd(fd);
+                client->markCgiStdoutClosed();
+            }
             return;
+        }
         close(fd);
         removePollFd(fd);
         client->markCgiStdoutClosed();
@@ -656,12 +654,21 @@ void Server::run() {
                         entry.client->markCgiStdinClosed();
                     }
                 } else if (entry.type == POLL_CGI_STDOUT) {
-                    if ((entry.pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) &&
+                    if ((entry.pfd.revents & POLLHUP) &&
                         !entry.client->isCgiStdoutClosed())
+                        entry.client->markCgiStdoutHangup();
+                    if ((entry.pfd.revents & POLLNVAL) &&
+                        !entry.client->isCgiStdoutClosed()) {
+                        close(fd);
+                        removePollFd(fd);
+                        entry.client->markCgiStdoutClosed();
+                    } else if ((entry.pfd.revents & (POLLERR | POLLHUP)) &&
+                               !entry.client->isCgiStdoutClosed()) {
                         drainCgiStdout(entry.client, fd);
-                    else if ((entry.pfd.revents & POLLIN) &&
-                             !entry.client->isCgiStdoutClosed())
+                    } else if ((entry.pfd.revents & POLLIN) &&
+                               !entry.client->isCgiStdoutClosed()) {
                         handleCgiStdout(entry.client, fd);
+                    }
                 }
                 checkCgiComplete(entry.client);
                 continue;

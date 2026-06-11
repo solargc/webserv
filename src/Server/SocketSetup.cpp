@@ -16,10 +16,7 @@ static int createTcpSocket() {
 }
 
 static bool setCloseOnExec(int fd) {
-    int flags = fcntl(fd, F_GETFD);
-    if (flags < 0)
-        return false;
-    return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
+    return fcntl(fd, F_SETFD, FD_CLOEXEC) == 0;
 }
 
 static sockaddr_in resolveAddress(const ServerConfig &cfg) {

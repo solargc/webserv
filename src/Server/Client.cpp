@@ -4,7 +4,8 @@
 Client::Client(int fd, const ServerConfig* config)
 	: fd(fd), serverConfig(config), cgiActive(false), cgiPid(-1),
 	  cgiStartedAt(0), cgiStdinFd(-1), cgiStdoutFd(-1), cgiInputSent(0),
-	  cgiStdinClosed(true), cgiStdoutClosed(true), cgiExited(true) {}
+	  cgiStdinClosed(true), cgiStdoutClosed(true), cgiExited(true),
+	  cgiStdoutHangup(false) {}
 
 Client::~Client() {
 	resetCgi();
@@ -20,7 +21,8 @@ const ServerConfig* Client::getServerConfig() const {
 }
 
 void Client::clearData() {
-	  buffer.clear();
+	std::string empty;
+	buffer.swap(empty);
 }
 
 void Client::appendData(const char *buf, int bytesRead) {
@@ -55,18 +57,19 @@ void Client::stripBodyFrom(size_t responseStart) {
 }
 
 void Client::startCgi(pid_t pid, int stdinFd, int stdoutFd,
-					  const std::string &input) {
+					  std::string &input) {
 	cgiActive = true;
 	cgiPid = pid;
 	cgiStartedAt = time(NULL);
 	cgiStdinFd = stdinFd;
 	cgiStdoutFd = stdoutFd;
-	cgiInput = input;
+	cgiInput.swap(input);
 	cgiInputSent = 0;
 	cgiOutput.clear();
 	cgiStdinClosed = (stdinFd < 0);
 	cgiStdoutClosed = (stdoutFd < 0);
 	cgiExited = false;
+	cgiStdoutHangup = false;
 }
 
 void Client::resetCgi() {
@@ -85,6 +88,7 @@ void Client::resetCgi() {
 	cgiStdinClosed = true;
 	cgiStdoutClosed = true;
 	cgiExited = true;
+	cgiStdoutHangup = false;
 }
 
 bool Client::hasCgi() const {
@@ -145,6 +149,10 @@ void Client::markCgiExited() {
 	cgiExited = true;
 }
 
+void Client::markCgiStdoutHangup() {
+	cgiStdoutHangup = true;
+}
+
 bool Client::isCgiStdinClosed() const {
 	return cgiStdinClosed;
 }
@@ -155,4 +163,8 @@ bool Client::isCgiStdoutClosed() const {
 
 bool Client::isCgiExited() const {
 	return cgiExited;
+}
+
+bool Client::hasCgiStdoutHangup() const {
+	return cgiStdoutHangup;
 }

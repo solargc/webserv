@@ -25,7 +25,7 @@ class Client {
 	void drainSendBuffer(size_t bytes);
 	void stripBodyFrom(size_t responseStart);
 
-	void startCgi(pid_t pid, int stdinFd, int stdoutFd, const std::string &input);
+	void startCgi(pid_t pid, int stdinFd, int stdoutFd, std::string &input);
 	void resetCgi();
 	bool hasCgi() const;
 	pid_t getCgiPid() const;
@@ -41,9 +41,11 @@ class Client {
 	void markCgiStdinClosed();
 	void markCgiStdoutClosed();
 	void markCgiExited();
+	void markCgiStdoutHangup();
 	bool isCgiStdinClosed() const;
 	bool isCgiStdoutClosed() const;
 	bool isCgiExited() const;
+	bool hasCgiStdoutHangup() const;
   private:
     int fd;
 	const ServerConfig *serverConfig;
@@ -62,6 +64,7 @@ class Client {
 	bool cgiStdinClosed;
 	bool cgiStdoutClosed;
 	bool cgiExited;
+	bool cgiStdoutHangup;
 };
 
 #endif
