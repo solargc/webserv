@@ -161,8 +161,8 @@ static std::string baseName(const std::string &path) {
 static std::string absolutePath(const std::string &path) {
 	if (path.empty() || path[0] == '/')
 		return path;
-	char cwd[4096];
-	if (getcwd(cwd, sizeof(cwd)) == NULL)
+	const char *cwd = std::getenv("PWD");
+	if (cwd == NULL)
 		return path;
 	return std::string(cwd) + "/" + path;
 }
