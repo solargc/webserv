@@ -18,6 +18,9 @@ Response::Response(const Request& req, const RouteConfig& route, const ServerCon
 
 std::string Response::resolvePath(const Request& req, const RouteConfig& route) {
 	std::string relativePath = req.path;
+	size_t query = relativePath.find('?');
+	if (query != std::string::npos)
+		relativePath = relativePath.substr(0, query);
 	if (route.path != "/" && relativePath.find(route.path) == 0)
 		relativePath = relativePath.substr(route.path.size());
 	if (relativePath.empty())
