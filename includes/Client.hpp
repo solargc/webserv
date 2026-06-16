@@ -19,6 +19,9 @@ class Client {
     const std::string &getBuffer() const;
 	const ServerConfig* getServerConfig() const;
 
+	void refreshActivity();
+	time_t getLastActivity() const;
+
 	void appendSendData(const std::string &data);
 	bool hasPendingData() const;
 	const std::string &getSendBuffer() const;
@@ -65,6 +68,7 @@ class Client {
 	bool cgiStdoutClosed;
 	bool cgiExited;
 	bool cgiStdoutHangup;
+	time_t lastActivity;
 };
 
 #endif

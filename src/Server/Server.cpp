@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 static const int CGI_TIMEOUT_SECONDS = 5;
+static const int CLIENT_TIMEOUT_SECONDS = 30;
 
 static bool setCloseOnExec(int fd) {
     return fcntl(fd, F_SETFD, FD_CLOEXEC) == 0;
@@ -281,7 +282,7 @@ bool Server::isRequestComplete(const std::string &buf) const {
     if (bodyPos == std::string::npos)
         return false;
     bodyPos += 4;
-    return (buf.size() - bodyPos == static_cast<size_t>(conLen));
+    return (buf.size() - bodyPos >= static_cast<size_t>(conLen));
 }
 
 static bool contentLengthExceedsLimit(const std::string &buf, size_t limit) {
@@ -604,6 +605,20 @@ bool Server::hasActiveCgi() const {
     return false;
 }
 
+void Server::checkClientTimeouts() {
+    std::vector<Client *> snapshot(clients.begin(), clients.end());
+    time_t now = time(NULL);
+    for (size_t i = 0; i < snapshot.size(); i++) {
+        Client *client = snapshot[i];
+        if (!hasClient(clients, client))
+            continue;
+        if (client->hasCgi())
+            continue;
+        if (now - client->getLastActivity() > CLIENT_TIMEOUT_SECONDS)
+            removeClient(client);
+    }
+}
+
 void Server::checkCgiProcesses() {
     std::vector<Client *> snapshot(clients.begin(), clients.end());
     for (size_t i = 0; i < snapshot.size(); i++) {
@@ -632,7 +647,7 @@ void Server::run() {
         for (size_t i = 0; i < pollEntries.size(); i++)
             fds.push_back(pollEntries[i].pfd);
 
-        int timeout = hasActiveCgi() ? 1000 : -1;
+        int timeout = (hasActiveCgi() || !clients.empty()) ? 1000 : -1;
         int pollResult = poll(&fds[0], fds.size(), timeout);
         if (pollResult < 0) {
             if (errno == EINTR)
@@ -704,13 +719,15 @@ void Server::run() {
                     hasClient(clients, client) && client->hasPendingData()) {
                     const std::string &buf = client->getSendBuffer();
                     ssize_t n = send(fd, buf.c_str(), buf.size(), 0);
-                    if (n > 0)
+                    if (n > 0) {
                         client->drainSendBuffer(n);
-                    else
+                        client->refreshActivity();
+                    } else
                         removeClient(client);
                 }
             }
         }
         checkCgiProcesses();
+        checkClientTimeouts();
     }
 }

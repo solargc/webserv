@@ -44,6 +44,7 @@ class Server {
     void checkCgiComplete(Client *client);
     bool hasActiveCgi() const;
     void checkCgiProcesses();
+    void checkClientTimeouts();
     void finishCgi(Client *client);
     void removeClient(Client *client);
 

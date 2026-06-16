@@ -5,7 +5,7 @@ Client::Client(int fd, const ServerConfig* config)
 	: fd(fd), serverConfig(config), cgiActive(false), cgiPid(-1),
 	  cgiStartedAt(0), cgiStdinFd(-1), cgiStdoutFd(-1), cgiInputSent(0),
 	  cgiStdinClosed(true), cgiStdoutClosed(true), cgiExited(true),
-	  cgiStdoutHangup(false) {}
+	  cgiStdoutHangup(false), lastActivity(time(NULL)) {}
 
 Client::~Client() {
 	resetCgi();
@@ -27,6 +27,15 @@ void Client::clearData() {
 
 void Client::appendData(const char *buf, int bytesRead) {
     buffer.append(buf, bytesRead);
+    lastActivity = time(NULL);
+}
+
+void Client::refreshActivity() {
+    lastActivity = time(NULL);
+}
+
+time_t Client::getLastActivity() const {
+    return lastActivity;
 }
 
 const std::string &Client::getBuffer() const {
