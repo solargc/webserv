@@ -241,10 +241,8 @@ static bool chunkedRequestComplete(const std::string &buf) {
     size_t bodyPos = buf.find("\r\n\r\n");
     if (bodyPos == std::string::npos)
         return false;
-    bodyPos += 4;
-    if (buf.size() - bodyPos < 5)
-        return false;
-    return buf.compare(buf.size() - 5, 5, "0\r\n\r\n") == 0;
+    std::string decoded;
+    return decodeChunkedBody(buf.substr(bodyPos + 4), decoded);
 }
 
 void Server::acceptClient(int listenFd, const ServerConfig *config) {
@@ -385,6 +383,16 @@ void Server::readClient(Client *client) {
         client->appendSendData(err);
         client->clearData();
         return;
+    }
+
+    if (isChunkedRequest(buf) && bodyLimit != 0) {
+        size_t bodyPos = buf.find("\r\n\r\n") + 4;
+        if (buf.size() - bodyPos > bodyLimit) {
+            std::string err = Response::status("413", *config);
+            client->appendSendData(err);
+            client->clearData();
+            return;
+        }
     }
 
     if (!isRequestComplete(buf))
