@@ -21,6 +21,8 @@ class Client {
 
 	void refreshActivity();
 	time_t getLastActivity() const;
+	void markContinueSent();
+	bool isContinueSent() const;
 
 	void appendSendData(const std::string &data);
 	bool hasPendingData() const;
@@ -69,6 +71,7 @@ class Client {
 	bool cgiExited;
 	bool cgiStdoutHangup;
 	time_t lastActivity;
+	bool continueSent;
 };
 
 #endif

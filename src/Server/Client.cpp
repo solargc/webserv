@@ -5,7 +5,7 @@ Client::Client(int fd, const ServerConfig* config)
 	: fd(fd), serverConfig(config), cgiActive(false), cgiPid(-1),
 	  cgiStartedAt(0), cgiStdinFd(-1), cgiStdoutFd(-1), cgiInputSent(0),
 	  cgiStdinClosed(true), cgiStdoutClosed(true), cgiExited(true),
-	  cgiStdoutHangup(false), lastActivity(time(NULL)) {}
+	  cgiStdoutHangup(false), lastActivity(time(NULL)), continueSent(false) {}
 
 Client::~Client() {
 	resetCgi();
@@ -23,6 +23,15 @@ const ServerConfig* Client::getServerConfig() const {
 void Client::clearData() {
 	std::string empty;
 	buffer.swap(empty);
+	continueSent = false;
+}
+
+void Client::markContinueSent() {
+	continueSent = true;
+}
+
+bool Client::isContinueSent() const {
+	return continueSent;
 }
 
 void Client::appendData(const char *buf, int bytesRead) {

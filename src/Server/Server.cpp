@@ -169,6 +169,13 @@ static std::string headerValue(const std::string &buf, const std::string &name) 
     return "";
 }
 
+static bool requestExpectsContinue(const std::string &buf) {
+    std::string value = headerValue(buf, "expect");
+    for (size_t i = 0; i < value.size(); i++)
+        value[i] = std::tolower(static_cast<unsigned char>(value[i]));
+    return value.find("100-continue") != std::string::npos;
+}
+
 static bool isChunkedRequest(const std::string &buf) {
     std::string transferEncoding = headerValue(buf, "transfer-encoding");
     size_t pos = 0;
@@ -242,8 +249,14 @@ static bool chunkedRequestComplete(const std::string &buf) {
     size_t bodyPos = buf.find("\r\n\r\n");
     if (bodyPos == std::string::npos)
         return false;
-    std::string decoded;
-    return decodeChunkedBody(buf.substr(bodyPos + 4), decoded);
+    bodyPos += 4;
+    if (buf.size() - bodyPos < 5)
+        return false;
+    if (buf.compare(buf.size() - 5, 5, "0\r\n\r\n") == 0)
+        return true;
+    if (buf.compare(buf.size() - 4, 4, "\r\n\r\n") == 0)
+        return buf.find("\r\n0\r\n", bodyPos) != std::string::npos;
+    return false;
 }
 
 void Server::acceptClient(int listenFd, const ServerConfig *config) {
@@ -386,14 +399,9 @@ void Server::readClient(Client *client) {
         return;
     }
 
-    if (isChunkedRequest(buf) && bodyLimit != 0) {
-        size_t bodyPos = buf.find("\r\n\r\n") + 4;
-        if (buf.size() - bodyPos > bodyLimit) {
-            std::string err = Response::status("413", *config);
-            client->appendSendData(err);
-            client->clearData();
-            return;
-        }
+    if (requestExpectsContinue(buf) && !client->isContinueSent()) {
+        client->appendSendData("HTTP/1.1 100 Continue\r\n\r\n");
+        client->markContinueSent();
     }
 
     if (!isRequestComplete(buf))
