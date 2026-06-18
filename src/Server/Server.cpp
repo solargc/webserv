@@ -3,16 +3,16 @@
 #include "Response.hpp"
 #include "SocketSetup.hpp"
 
-#include <cerrno>
 #include <cctype>
+#include <cerrno>
 #include <cstdlib>
+#include <ctime>
 #include <fcntl.h>
 #include <iostream>
+#include <signal.h>
 #include <stdexcept>
 #include <sys/socket.h>
 #include <sys/wait.h>
-#include <ctime>
-#include <signal.h>
 #include <unistd.h>
 
 static const int CGI_TIMEOUT_SECONDS = 5;
@@ -145,7 +145,8 @@ static bool parseContentLength(const std::string &buf, unsigned long &length) {
     return *endptr == '\0';
 }
 
-static std::string headerValue(const std::string &buf, const std::string &name) {
+static std::string headerValue(const std::string &buf,
+                               const std::string &name) {
     size_t pos = buf.find("\r\n");
     if (pos == std::string::npos)
         return "";
@@ -390,9 +391,8 @@ void Server::readClient(Client *client) {
 
     const ServerConfig *config = client->getServerConfig();
     size_t bodyLimit = effectiveBodyLimit(buf, config);
-    if (!isChunkedRequest(buf) &&
-        (contentLengthExceedsLimit(buf, bodyLimit) ||
-         bodyExceedsLimit(buf, bodyLimit))) {
+    if (!isChunkedRequest(buf) && (contentLengthExceedsLimit(buf, bodyLimit) ||
+                                   bodyExceedsLimit(buf, bodyLimit))) {
         std::string err = Response::status("413", *config);
         client->appendSendData(err);
         client->clearData();
@@ -441,8 +441,8 @@ void Server::readClient(Client *client) {
     }
 
     if (route->hasRedirect) {
-        std::string res = Response::redirect(route->redirectCode,
-                                             route->redirectTarget);
+        std::string res =
+            Response::redirect(route->redirectCode, route->redirectTarget);
         client->appendSendData(res);
         client->clearData();
         return;
@@ -584,7 +584,8 @@ void Server::checkCgiComplete(Client *client) {
             client->markCgiStdoutClosed();
         }
         waitpid(client->getCgiPid(), NULL, 0);
-        client->appendSendData(Response::status("500", *client->getServerConfig()));
+        client->appendSendData(
+            Response::status("500", *client->getServerConfig()));
         client->resetCgi();
         return;
     }
@@ -640,7 +641,6 @@ void Server::run() {
         if (pollEntries.empty())
             throw std::runtime_error("No sockets configured");
 
-        // Register POLLOUT for clients with pending data
         for (size_t i = 0; i < pollEntries.size(); i++) {
             if (pollEntries[i].type != POLL_CLIENT)
                 continue;
@@ -670,8 +670,8 @@ void Server::run() {
         for (size_t i = 0; i < ready.size(); i++) {
             PollEntry &entry = ready[i];
             int fd = entry.pfd.fd;
-            bool isCgi = entry.type == POLL_CGI_STDIN ||
-                         entry.type == POLL_CGI_STDOUT;
+            bool isCgi =
+                entry.type == POLL_CGI_STDIN || entry.type == POLL_CGI_STDOUT;
 
             if (isCgi && entry.client && hasClient(clients, entry.client)) {
                 if (entry.type == POLL_CGI_STDIN) {
