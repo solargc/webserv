@@ -2,7 +2,6 @@
 
 # webserv
 
-<<<<<<< HEAD
 ## Description
 
 webserv is a lightweight HTTP/1.1 server written in C++98, built from scratch without the use of any external libraries. The goal of the project is to gain a deep understanding of how web servers work by implementing one, including socket management, request parsing, response generation, CGI execution, file uploads, and directory listing.
