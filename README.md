@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by pascal, jacobus.*
+*This project has been created as part of the 42 curriculum by pbuyse, jade-vla.*
 
 # webserv
 
